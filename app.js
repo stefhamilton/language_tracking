@@ -495,14 +495,9 @@ RULES:
 function renderProgressChart() {
     const container = document.getElementById('progress-charts');
 
-    if (!progressHistory || progressHistory.length === 0) {
-        container.innerHTML = '<p class="context">No progress history yet — sync a tutor session to start tracking.</p>';
-        return;
-    }
-
     // Group history by phase
     const phaseGroups = {};
-    for (const entry of progressHistory) {
+    for (const entry of (progressHistory || [])) {
         const phase = String(entry.phase);
         if (!phaseGroups[phase]) phaseGroups[phase] = [];
         phaseGroups[phase].push(entry);
@@ -514,10 +509,10 @@ function renderProgressChart() {
     }
 
     let html = '';
-    const phaseIds = Object.keys(phaseGroups).sort((a, b) => Number(a) - Number(b));
+    const phaseIds = stages.map(s => String(s.id));
 
     for (const phaseId of phaseIds) {
-        const entries = phaseGroups[phaseId];
+        const entries = phaseGroups[phaseId] || [];
         const stage = stages.find(s => String(s.id) === phaseId);
         const phaseName = stage ? stage.name : `Phase ${phaseId}`;
 
@@ -545,33 +540,10 @@ function renderSVGChart(entries) {
     const chartH = height - padTop - padBottom;
 
     const maxY = 6; // Bloom levels 1–6
-    const minY = 0;
 
-    // X positions evenly spaced
-    const n = entries.length;
-    const xStep = n > 1 ? chartW / (n - 1) : chartW / 2;
-
-    function toX(i) { return padLeft + (n > 1 ? i * xStep : chartW / 2); }
     function toY(val) { return padTop + chartH - (val / maxY) * chartH; }
 
-    // Build polyline points
-    let vocabPoints = '';
-    let conceptPoints = '';
-    for (let i = 0; i < n; i++) {
-        const x = toX(i).toFixed(1);
-        const yv = toY(Number(entries[i].avgBloomVocab) || 0).toFixed(1);
-        const yc = toY(Number(entries[i].avgBloomConcepts) || 0).toFixed(1);
-        vocabPoints += `${x},${yv} `;
-        conceptPoints += `${x},${yc} `;
-    }
-
-    // Date labels for first, middle, last
-    const dateLabels = [];
-    if (n >= 1) dateLabels.push({ i: 0, label: formatDate(entries[0].timestamp) });
-    if (n >= 3) dateLabels.push({ i: Math.floor(n / 2), label: formatDate(entries[Math.floor(n / 2)].timestamp) });
-    if (n >= 2) dateLabels.push({ i: n - 1, label: formatDate(entries[n - 1].timestamp) });
-
-    // Y-axis grid lines
+    // Y-axis grid lines (always shown)
     let gridLines = '';
     for (let level = 1; level <= 6; level++) {
         const y = toY(level).toFixed(1);
@@ -579,23 +551,56 @@ function renderSVGChart(entries) {
         gridLines += `<text x="${padLeft - 5}" y="${Number(y) + 3}" fill="#94a3b8" font-size="9" text-anchor="end">${level}</text>`;
     }
 
+    // No data — just the empty grid
+    if (entries.length === 0) {
+        return `<svg class="progress-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+            ${gridLines}
+        </svg>`;
+    }
+
+    // X positions evenly spaced
+    const n = entries.length;
+    function toX(i) {
+        if (n === 1) return padLeft + chartW / 2;
+        return padLeft + i * (chartW / (n - 1));
+    }
+
+    // Build points
+    let vocabPoints = '';
+    let conceptPoints = '';
+    let vocabDots = '';
+    let conceptDots = '';
+
+    for (let i = 0; i < n; i++) {
+        const x = toX(i).toFixed(1);
+        const yv = toY(Number(entries[i].avgBloomVocab) || 0).toFixed(1);
+        const yc = toY(Number(entries[i].avgBloomConcepts) || 0).toFixed(1);
+        vocabPoints += `${x},${yv} `;
+        conceptPoints += `${x},${yc} `;
+        vocabDots += `<circle cx="${x}" cy="${yv}" r="3" fill="#10b981"/>`;
+        conceptDots += `<circle cx="${x}" cy="${yc}" r="3" fill="#38bdf8"/>`;
+    }
+
+    // Only draw lines if more than 1 point
+    let lines = '';
+    if (n > 1) {
+        lines += `<polyline points="${vocabPoints.trim()}" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+        lines += `<polyline points="${conceptPoints.trim()}" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+
+    // Date labels
+    const dateLabels = [];
+    dateLabels.push({ i: 0, label: formatDate(entries[0].timestamp) });
+    if (n >= 3) dateLabels.push({ i: Math.floor(n / 2), label: formatDate(entries[Math.floor(n / 2)].timestamp) });
+    if (n >= 2) dateLabels.push({ i: n - 1, label: formatDate(entries[n - 1].timestamp) });
+
     let dateText = dateLabels.map(d =>
         `<text x="${toX(d.i).toFixed(1)}" y="${height - 3}" fill="#94a3b8" font-size="9" text-anchor="middle">${d.label}</text>`
     ).join('');
 
-    // Dots at data points
-    let vocabDots = '';
-    let conceptDots = '';
-    for (let i = 0; i < n; i++) {
-        const x = toX(i).toFixed(1);
-        vocabDots += `<circle cx="${x}" cy="${toY(Number(entries[i].avgBloomVocab) || 0).toFixed(1)}" r="3" fill="#10b981"/>`;
-        conceptDots += `<circle cx="${x}" cy="${toY(Number(entries[i].avgBloomConcepts) || 0).toFixed(1)}" r="3" fill="#38bdf8"/>`;
-    }
-
     return `<svg class="progress-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
         ${gridLines}
-        <polyline points="${vocabPoints.trim()}" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <polyline points="${conceptPoints.trim()}" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        ${lines}
         ${vocabDots}
         ${conceptDots}
         ${dateText}
