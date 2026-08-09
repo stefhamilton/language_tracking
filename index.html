@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hiligaynon SLA Mastery Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #121826;
+            --card-bg: #1e293b;
+            --accent: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+        }
+
+        h1 { margin: 0 0 5px 0; color: var(--accent); }
+        p.subtitle { margin: 0; color: var(--text-muted); font-size: 0.95rem; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: var(--accent);
+            margin: 5px 0;
+        }
+
+        .metric-label { font-size: 0.85rem; color: var(--text-muted); }
+
+        .section-card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        h2 { font-size: 1.2rem; margin-top: 0; color: var(--accent); }
+
+        .flashcard {
+            background: #0f172a;
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            margin-bottom: 15px;
+        }
+
+        .flashcard .word { font-size: 1.8rem; font-weight: bold; }
+        .context { font-size: 0.9rem; color: var(--text-muted); }
+        .flashcard .context { margin-top: 8px; }
+        .context.error-text { color: #ef4444; }
+        .flashcard .hint { font-size: 0.7rem; color: var(--text-muted); opacity: 0.7; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+
+        .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        button {
+            background: var(--accent);
+            color: #000;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.secondary { background: #475569; color: #fff; }
+        button.danger { background: #ef4444; color: #fff; }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: #f8fafc;
+            border-radius: 6px;
+            padding: 10px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+
+        textarea { height: 90px; resize: none; }
+
+        .stage-list { display: flex; flex-direction: column; gap: 8px; }
+        .stage-item {
+            background: #0f172a;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+        }
+        .stage-item > summary {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            cursor: pointer;
+            list-style: none;
+        }
+        .stage-item > summary::-webkit-details-marker { display: none; }
+        .stage-row-main { display: flex; align-items: center; gap: 8px; }
+        .stage-toggle-icon { color: var(--text-muted); font-size: 0.75rem; }
+        .stage-row .stage-name { font-weight: bold; }
+        .stage-row .stage-focus { color: var(--text-muted); font-size: 0.85rem; }
+        .concept-list {
+            padding: 0 14px 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 4px;
+        }
+        .concept-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 10px;
+            padding-top: 10px;
+        }
+        .concept-row .concept-name { font-weight: bold; font-size: 0.9rem; }
+        .bloom-badge {
+            font-weight: normal;
+            font-size: 0.7rem;
+            color: #38bdf8;
+            background: #38bdf833;
+            padding: 2px 8px;
+            border-radius: 999px;
+            margin-left: 6px;
+        }
+        .concept-row .concept-desc { color: var(--text-muted); font-size: 0.8rem; margin-top: 2px; }
+        .concept-toggle-btn {
+            flex-shrink: 0;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+        }
+        .concept-toggle-btn.got-it { background: #10b981; color: #000; }
+        .concept-toggle-btn.not-yet { background: #475569; color: #fff; }
+        .vocab-progress-line { color: var(--text-muted); font-size: 0.8rem; padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
+        .status-pill {
+            font-size: 0.75rem;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-weight: bold;
+        }
+        .status-Done { background: #10b98133; color: #10b981; }
+        .status-In.Progress, .status-inprogress { background: #f59e0b33; color: #f59e0b; }
+        .status-Not.Started, .status-notstarted { background: #47556933; color: #94a3b8; }
+
+        #status-banner {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+        }
+        #status-banner.error { color: #ef4444; }
+
+        .mnemonic-panel {
+            margin-top: 15px;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+        }
+        .mnemonic-panel textarea, .mnemonic-panel input[type="text"] {
+            font-family: inherit;
+        }
+        #mnemonic-img {
+            max-width: 100%;
+            max-height: 220px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Capiz Farm Hiligaynon SLA App</h1>
+        <p class="subtitle">Location: Sapi-an | Framework: SLA 300 Core &amp; LEGO Prefixes</p>
+    </header>
+
+    <div id="status-banner">Connecting to your Sheet…</div>
+
+    <details class="section-card" id="settings-panel">
+        <summary>⚙️ Settings — Apps Script Web App URL</summary>
+        <div style="margin-top: 12px;">
+            <input type="text" id="script-url" placeholder="https://script.google.com/macros/s/XXXX/exec">
+            <div class="btn-group" style="margin-top: 10px; justify-content: flex-start;">
+                <button onclick="saveScriptUrl()">Save &amp; Connect</button>
+            </div>
+        </div>
+    </details>
+
+    <div class="dashboard-grid">
+        <div class="metric-card">
+            <div class="metric-label">Core Vocab Retention</div>
+            <div class="metric-value" id="retention-val">0 / 0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Current Stage</div>
+            <div class="metric-value" id="stage-val">—</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Daily Field Output</div>
+            <div class="metric-value" id="field-val">0</div>
+            <button onclick="incField()" style="padding: 2px 8px; font-size: 0.8rem; margin-top: 4px;">+1 Phrase</button>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <h2>📚 Core Vocabulary Active Recall</h2>
+        <div class="flashcard" id="card" onclick="flipCard()">
+            <div class="word" id="card-word">Loading...</div>
+            <div class="context" id="card-context">Click to flip</div>
+            <div class="hint" id="card-hint">Category</div>
+        </div>
+        <div class="btn-group">
+            <button class="danger" onclick="scoreCard(false)">Missed ❌</button>
+            <button onclick="scoreCard(true)">Remembered 🎯</button>
+        </div>
+
+        <details class="mnemonic-panel">
+            <summary>🧠 Mnemonic (image / note)</summary>
+            <div style="margin-top: 10px;">
+                <img id="mnemonic-img" style="display:none;" alt="Mnemonic image">
+                <input type="text" id="mnemonic-image-url" placeholder="Image URL (e.g. Google Photos/Drive share link)">
+                <textarea id="mnemonic-note" placeholder="Mnemonic note, e.g. &quot;Iwas sounds like 'eye was' — my eye WAS almost poked, so I stepped aside&quot;" style="height: 60px; margin-top: 8px;"></textarea>
+                <div class="btn-group" style="margin-top: 8px; justify-content: flex-start;">
+                    <button class="secondary" id="mnemonic-save-btn" onclick="saveMnemonic()">Save Mnemonic</button>
+                    <span id="mnemonic-save-status" class="context"></span>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <div class="section-card">
+        <h2>🗺️ Plan Progress</h2>
+        <div class="stage-list" id="stage-list"></div>
+    </div>
+
+    <div class="section-card">
+        <h2>📋 AI Session Master Prompt Persistence</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Copy this snippet anytime you open a new AI chat to instantly load your updated stats.</p>
+        <textarea id="prompt-output" readonly style="height: 260px; resize: vertical;"></textarea>
+        <div style="text-align: right; margin-top: 8px;">
+            <button onclick="copyPrompt()">Copy Session Context</button>
+        </div>
+
+        <details class="mnemonic-panel">
+            <summary>🔄 Sync progress from tutor</summary>
+            <div style="margin-top: 10px;">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 8px;">Paste the updated state block your tutor gave you back here. This mirrors it exactly — checked items get marked remembered, unchecked items get marked not-remembered.</p>
+                <textarea id="tutor-import-input" placeholder="Paste the updated MY HILIGAYNON APP STATE block here..." style="height: 160px;"></textarea>
+                <div class="btn-group" style="margin-top: 8px; justify-content: flex-start;">
+                    <button class="secondary" id="tutor-import-btn" onclick="importTutorState()">Sync from Tutor</button>
+                    <span id="tutor-import-status" class="context"></span>
+                </div>
+            </div>
+        </details>
+    </div>
+</div>
+
+<script src="app.js?v=9"></script>
+</body>
+</html>
