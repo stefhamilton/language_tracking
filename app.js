@@ -168,6 +168,13 @@ function currentStage() {
 function updateDashboard() {
     const masteredCount = vocabDeck.filter(v => v.mastered).length;
     document.getElementById('retention-val').innerText = `${masteredCount} / ${vocabDeck.length}`;
+
+    const conceptsMastered = concepts.filter(c => {
+        const match = (c.bloomLevel || '').match(/Level\s*(\d+)/);
+        return match && Number(match[1]) >= 3;
+    }).length;
+    document.getElementById('concepts-val').innerText = `${conceptsMastered} / ${concepts.length}`;
+
     document.getElementById('field-val').innerText = fieldCountToday;
     renderProgressGauge();
 
