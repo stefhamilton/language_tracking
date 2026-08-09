@@ -1,9 +1,16 @@
 # Hiligaynon SLA Mastery Dashboard
 
 A personal Ilonggo/Hiligaynon language-tracking dashboard: flashcards, a
-production-latency drill, and a plan/stage tracker — all backed by a Google
-Sheet, with a "Copy Session Context" button that hands an AI assistant a
-snapshot of your current progress so it always knows what you're working on.
+plan/stage tracker, and progress charts — all backed by a Google Sheet, with
+a structured JSON interchange format that hands an AI tutor a snapshot of your
+current progress so it always knows what you're working on.
+
+This approach uses syntactic bootstrapping (Lila Gleitman) and generative
+grammar (Noam Chomsky) to master a core structural framework first, enabling
+your brain to automatically deduce new vocabulary from context and generate
+unlimited natural sentences. Progress is tracked using Bloom's Taxonomy to
+measure depth of understanding, and spaced repetition to optimize long-term
+retention of each concept.
 
 - **Frontend**: static HTML/JS ([index.html](index.html), [app.js](app.js)), hosted on GitHub Pages.
 - **Backend**: a Google Apps Script Web App bound to your Sheet ([apps-script/Code.gs](apps-script/Code.gs)) — no server to host or maintain.
