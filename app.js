@@ -62,6 +62,11 @@ async function loadData() {
         renderStages();
         renderProgressChart();
         updateDashboard();
+
+        // Log a baseline snapshot if we have no history yet
+        if (progressHistory.length === 0 && stages.length > 0) {
+            await logProgressSnapshot();
+        }
     } catch (err) {
         setStatus('Could not load data: ' + err.message, true);
     }
@@ -868,6 +873,9 @@ async function importLegacyText(text, btn, statusElem) {
             vocabChanges++;
         }
     }
+
+    // Log progress snapshot
+    await logProgressSnapshot();
 
     btn.disabled = false;
     statusElem.innerText = `✓ Synced — ${conceptChanges} concept${conceptChanges === 1 ? '' : 's'}, ${vocabChanges} word${vocabChanges === 1 ? '' : 's'} updated.`;
