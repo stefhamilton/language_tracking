@@ -73,29 +73,10 @@
 
         h2 { font-size: 1.2rem; margin-top: 0; color: var(--accent); }
 
-        .flashcard {
-            background: #0f172a;
-            border: 2px dashed var(--border);
-            border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-            cursor: pointer;
-            min-height: 120px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            user-select: none;
-            margin-bottom: 15px;
-        }
-
-        .flashcard .word { font-size: 1.8rem; font-weight: bold; }
-        .context { font-size: 0.9rem; color: var(--text-muted); }
-        .flashcard .context { margin-top: 8px; }
-        .context.error-text { color: #ef4444; }
-        .flashcard .hint { font-size: 0.7rem; color: var(--text-muted); opacity: 0.7; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
-
         .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+        .context { font-size: 0.9rem; color: var(--text-muted); }
+        .context.error-text { color: #ef4444; }
 
         button {
             background: var(--accent);
@@ -197,22 +178,6 @@
         }
         #status-banner.error { color: #ef4444; }
 
-        .mnemonic-panel {
-            margin-top: 15px;
-            border-top: 1px solid var(--border);
-            padding-top: 12px;
-        }
-        .mnemonic-panel textarea, .mnemonic-panel input[type="text"] {
-            font-family: inherit;
-        }
-        #mnemonic-img {
-            max-width: 100%;
-            max-height: 220px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            display: block;
-        }
-
         details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85rem; }
 
         .info-bubble {
@@ -280,32 +245,6 @@
             <div class="metric-value" id="field-val">0</div>
             <button onclick="incField()" style="padding: 2px 8px; font-size: 0.8rem; margin-top: 4px;">+1 Phrase</button>
         </div>
-    </div>
-
-    <div class="section-card">
-        <h2>📚 Core Vocabulary Active Recall</h2>
-        <div class="flashcard" id="card" onclick="flipCard()">
-            <div class="word" id="card-word">Loading...</div>
-            <div class="context" id="card-context">Click to flip</div>
-            <div class="hint" id="card-hint">Category</div>
-        </div>
-        <div class="btn-group">
-            <button class="danger" onclick="scoreCard(false)">Missed ❌</button>
-            <button onclick="scoreCard(true)">Remembered 🎯</button>
-        </div>
-
-        <details class="mnemonic-panel">
-            <summary>🧠 Mnemonic (image / note)</summary>
-            <div style="margin-top: 10px;">
-                <img id="mnemonic-img" style="display:none;" alt="Mnemonic image">
-                <input type="text" id="mnemonic-image-url" placeholder="Image URL (e.g. Google Photos/Drive share link)">
-                <textarea id="mnemonic-note" placeholder="Mnemonic note, e.g. &quot;Iwas sounds like 'eye was' — my eye WAS almost poked, so I stepped aside&quot;" style="height: 60px; margin-top: 8px;"></textarea>
-                <div class="btn-group" style="margin-top: 8px; justify-content: flex-start;">
-                    <button class="secondary" id="mnemonic-save-btn" onclick="saveMnemonic()">Save Mnemonic</button>
-                    <span id="mnemonic-save-status" class="context"></span>
-                </div>
-            </div>
-        </details>
     </div>
 
     <div class="section-card">

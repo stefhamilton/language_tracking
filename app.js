@@ -8,7 +8,6 @@ let concepts = [];
 let progressHistory = [];
 let openStageIds = null;
 
-let currentCardIndex = 0;
 let fieldCountToday = 0;
 
 document.getElementById('script-url').value = scriptUrl;
@@ -45,7 +44,6 @@ async function loadData() {
         vocabDeck = (data.vocab || []).map(v => ({
             ...v,
             mastered: v.mastered === true || v.mastered === 'TRUE',
-            flipped: false,
         }));
         stages = data.stages || [];
         log = data.log || [];
@@ -58,7 +56,6 @@ async function loadData() {
         fieldCountToday = countTodayFieldEntries(log);
 
         setStatus('Connected. Last synced ' + new Date().toLocaleTimeString());
-        renderCard();
         renderStages();
         renderProgressChart();
         updateDashboard();
@@ -90,93 +87,6 @@ async function callScript(payload) {
         setStatus('Sync failed: ' + err.message, true);
         return false;
     }
-}
-
-function renderCard() {
-    if (vocabDeck.length === 0) {
-        document.getElementById('card-word').innerText = 'No vocab loaded';
-        document.getElementById('card-context').innerText = '';
-        document.getElementById('card-hint').innerText = '';
-        return;
-    }
-    const card = vocabDeck[currentCardIndex];
-    const wordElem = document.getElementById('card-word');
-    const contextElem = document.getElementById('card-context');
-    const hintElem = document.getElementById('card-hint');
-
-    if (!card.flipped) {
-        wordElem.innerText = card.eng;
-        contextElem.innerText = "Click to reveal Hiligaynon";
-        hintElem.innerText = "Category: " + card.cat;
-    } else {
-        wordElem.innerText = card.hil;
-        contextElem.innerText = "English: " + card.eng;
-        hintElem.innerText = card.mastered ? "Remembered ✓" : "";
-    }
-
-    renderMnemonicPanel(card);
-}
-
-function renderMnemonicPanel(card) {
-    const imgElem = document.getElementById('mnemonic-img');
-    const imgUrlInput = document.getElementById('mnemonic-image-url');
-    const noteInput = document.getElementById('mnemonic-note');
-
-    imgUrlInput.value = card.mnemonicImageUrl || '';
-    noteInput.value = card.mnemonic || '';
-
-    if (card.mnemonicImageUrl) {
-        imgElem.src = card.mnemonicImageUrl;
-        imgElem.style.display = 'block';
-    } else {
-        imgElem.style.display = 'none';
-    }
-}
-
-async function saveMnemonic() {
-    if (vocabDeck.length === 0) return;
-    const card = vocabDeck[currentCardIndex];
-    const mnemonic = document.getElementById('mnemonic-note').value.trim();
-    const mnemonicImageUrl = document.getElementById('mnemonic-image-url').value.trim();
-    const btn = document.getElementById('mnemonic-save-btn');
-    const statusElem = document.getElementById('mnemonic-save-status');
-
-    card.mnemonic = mnemonic;
-    card.mnemonicImageUrl = mnemonicImageUrl;
-
-    btn.disabled = true;
-    statusElem.innerText = 'Saving…';
-    statusElem.className = 'context';
-
-    const ok = await callScript({ action: 'setMnemonic', hil: card.hil, mnemonic, mnemonicImageUrl });
-
-    btn.disabled = false;
-    statusElem.innerText = ok ? `✓ Saved for ${card.hil}` : 'Save failed — check connection';
-    statusElem.className = ok ? 'context' : 'context error-text';
-    setTimeout(() => { statusElem.innerText = ''; }, 3000);
-
-    renderMnemonicPanel(card);
-}
-
-function flipCard() {
-    if (vocabDeck.length === 0) return;
-    vocabDeck[currentCardIndex].flipped = !vocabDeck[currentCardIndex].flipped;
-    renderCard();
-}
-
-function scoreCard(isMastered) {
-    if (vocabDeck.length === 0) return;
-    const card = vocabDeck[currentCardIndex];
-    card.mastered = isMastered;
-    if (isMastered) card.timesCorrect = (card.timesCorrect || 0) + 1;
-    else card.timesMissed = (card.timesMissed || 0) + 1;
-
-    callScript({ action: 'markVocab', hil: card.hil, mastered: isMastered });
-
-    card.flipped = false;
-    currentCardIndex = (currentCardIndex + 1) % vocabDeck.length;
-    updateDashboard();
-    renderCard();
 }
 
 function incField() {
@@ -216,7 +126,7 @@ function renderStages() {
                     <div class="concept-name">${c.name}${c.bloomLevel ? ` <span class="bloom-badge">${c.bloomLevel}</span>` : ''}</div>
                     <div class="concept-desc">${c.description}</div>
                 </div>
-                <button class="concept-toggle-btn ${c.mastered ? 'got-it' : 'not-yet'}" onclick="toggleConcept('${escapeAttr(c.name)}', ${!c.mastered})">${c.mastered ? 'Got It ✓' : 'Mark Understood'}</button>
+                <div class="concept-status">${formatLastStudied(c.lastReviewed)}</div>
             </div>
         `).join('');
 
@@ -244,16 +154,11 @@ function escapeAttr(str) {
     return String(str).replace(/'/g, "\\'");
 }
 
-function toggleConcept(name, mastered) {
-    const concept = concepts.find(c => c.name === name);
-    if (!concept) return;
-    concept.mastered = mastered;
-    if (mastered) concept.timesCorrect = (concept.timesCorrect || 0) + 1;
-    else concept.timesMissed = (concept.timesMissed || 0) + 1;
-
-    callScript({ action: 'markConcept', name, mastered });
-    renderStages();
-    updateDashboard();
+function formatLastStudied(lastReviewed) {
+    if (!lastReviewed) return 'Not yet studied';
+    const d = new Date(lastReviewed);
+    if (isNaN(d.getTime())) return 'Not yet studied';
+    return `Last studied ${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
 }
 
 function currentStage() {
@@ -264,6 +169,7 @@ function updateDashboard() {
     const masteredCount = vocabDeck.filter(v => v.mastered).length;
     document.getElementById('retention-val').innerText = `${masteredCount} / ${vocabDeck.length}`;
     document.getElementById('field-val').innerText = fieldCountToday;
+    renderProgressGauge();
 
     const stage = currentStage();
     document.getElementById('stage-val').innerText = stage ? stage.name : '—';
@@ -497,7 +403,73 @@ RULES:
     document.getElementById('prompt-output').value = promptText;
 }
 
+function overallProgressPercent() {
+    const vocabTotal = vocabDeck.length;
+    const vocabMastered = vocabDeck.filter(v => v.mastered).length;
+    const conceptsTotal = concepts.length;
+    const conceptsMastered = concepts.filter(c => c.mastered).length;
+
+    const vocabPct = vocabTotal > 0 ? vocabMastered / vocabTotal : 0;
+    const conceptsPct = conceptsTotal > 0 ? conceptsMastered / conceptsTotal : 0;
+
+    if (vocabTotal === 0 && conceptsTotal === 0) return 0;
+    if (conceptsTotal === 0) return Math.round(vocabPct * 100);
+    if (vocabTotal === 0) return Math.round(conceptsPct * 100);
+    return Math.round(((vocabPct + conceptsPct) / 2) * 100);
+}
+
+function polarToCartesian(cx, cy, r, angleDeg) {
+    const rad = (angleDeg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+}
+
+// percent 0-100 maps to angle 180deg (left/0%) -> 0deg (right/100%)
+function percentToAngle(percent) {
+    return 180 - (percent / 100) * 180;
+}
+
+function describeArc(cx, cy, r, startPercent, endPercent) {
+    const startAngle = percentToAngle(startPercent);
+    const endAngle = percentToAngle(endPercent);
+    const start = polarToCartesian(cx, cy, r, startAngle);
+    const end = polarToCartesian(cx, cy, r, endAngle);
+    const largeArcFlag = startAngle - endAngle <= 180 ? 0 : 1;
+    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} 1 ${end.x} ${end.y}`;
+}
+
+function renderProgressGauge() {
+    const container = document.getElementById('progress-gauge-container');
+    if (!container) return;
+    const percent = overallProgressPercent();
+
+    const cx = 110, cy = 105, r = 90;
+    const needleAngle = percentToAngle(percent);
+    const needleLen = r - 14;
+    const needleTip = polarToCartesian(cx, cy, needleLen, needleAngle);
+
+    const zones = [
+        { from: 0, to: 33, color: '#ef4444' },
+        { from: 33, to: 66, color: '#f59e0b' },
+        { from: 66, to: 100, color: '#10b981' },
+    ];
+    const zoneArcs = zones.map(z =>
+        `<path d="${describeArc(cx, cy, r, z.from, z.to)}" fill="none" stroke="${z.color}" stroke-width="16" stroke-linecap="butt"/>`
+    ).join('');
+
+    const svg = `
+        <svg viewBox="0 0 220 130" style="width: 260px; max-width: 100%;">
+            ${zoneArcs}
+            <line x1="${cx}" y1="${cy}" x2="${needleTip.x.toFixed(1)}" y2="${needleTip.y.toFixed(1)}" stroke="#f8fafc" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="${cx}" cy="${cy}" r="7" fill="#f8fafc"/>
+            <text x="${cx}" y="${cy - 20}" text-anchor="middle" class="gauge-value">${percent}%</text>
+            <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="gauge-label">Overall Plan Progress</text>
+        </svg>
+    `;
+    container.innerHTML = svg;
+}
+
 function renderProgressChart() {
+    renderProgressGauge();
     const container = document.getElementById('progress-charts');
 
     // Group history by phase
@@ -520,15 +492,16 @@ function renderProgressChart() {
         const entries = phaseGroups[phaseId] || [];
         const stage = stages.find(s => String(s.id) === phaseId);
         const phaseName = stage ? stage.name : `Phase ${phaseId}`;
+        const isActive = stage && stage.status === 'In Progress';
 
-        html += `<div class="progress-chart-container">`;
-        html += `<h3>${phaseName}</h3>`;
+        html += `<details class="progress-chart-container"${isActive ? ' open' : ''}>`;
+        html += `<summary><h3>${phaseName}</h3></summary>`;
         html += renderSVGChart(entries);
         html += `<div class="chart-legend">`;
         html += `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:#10b981;"></span>Vocab</span>`;
         html += `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:#38bdf8;"></span>Concepts</span>`;
         html += `</div>`;
-        html += `</div>`;
+        html += `</details>`;
     }
 
     container.innerHTML = html;
@@ -645,7 +618,6 @@ async function importTutorState() {
         await importLegacyText(text, btn, statusElem);
     }
 
-    renderCard();
     renderStages();
     updateDashboard();
 }
