@@ -8,8 +8,6 @@ let concepts = [];
 let progressHistory = [];
 let openStageIds = null;
 
-let fieldCountToday = 0;
-
 document.getElementById('script-url').value = scriptUrl;
 if (scriptUrl) {
     document.getElementById('settings-panel').removeAttribute('open');
@@ -53,8 +51,6 @@ async function loadData() {
         }));
         progressHistory = data.progressHistory || [];
 
-        fieldCountToday = countTodayFieldEntries(log);
-
         setStatus('Connected. Last synced ' + new Date().toLocaleTimeString());
         renderStages();
         renderProgressChart();
@@ -67,11 +63,6 @@ async function loadData() {
     } catch (err) {
         setStatus('Could not load data: ' + err.message, true);
     }
-}
-
-function countTodayFieldEntries(entries) {
-    const today = new Date().toDateString();
-    return entries.filter(e => e.type === 'field' && new Date(e.timestamp).toDateString() === today).length;
 }
 
 async function callScript(payload) {
@@ -87,12 +78,6 @@ async function callScript(payload) {
         setStatus('Sync failed: ' + err.message, true);
         return false;
     }
-}
-
-function incField() {
-    fieldCountToday++;
-    callScript({ action: 'logEntry', type: 'field', detail: '+1 phrase' });
-    updateDashboard();
 }
 
 function renderStages() {
@@ -175,7 +160,6 @@ function updateDashboard() {
     }).length;
     document.getElementById('concepts-val').innerText = `${conceptsMastered} / ${concepts.length}`;
 
-    document.getElementById('field-val').innerText = fieldCountToday;
     renderProgressGauge();
 
     const stage = currentStage();
@@ -238,7 +222,6 @@ function updateDashboard() {
                 last_reviewed: v.lastReviewed || null,
             })),
             session_stats: {
-                today_field_output_count: fieldCountToday,
                 vocab_mastered_count: masteredCount,
                 vocab_total_count: vocabDeck.length,
             },
