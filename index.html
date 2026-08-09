@@ -214,6 +214,13 @@
         }
 
         details > summary { cursor: pointer; color: var(--text-muted); font-size: 0.85rem; }
+
+        .progress-chart-container { margin-bottom: 20px; }
+        .progress-chart-container h3 { font-size: 0.95rem; color: var(--text-muted); margin: 0 0 8px; }
+        .progress-chart-svg { width: 100%; height: 160px; }
+        .chart-legend { display: flex; gap: 16px; font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+        .chart-legend-item { display: flex; align-items: center; gap: 5px; }
+        .chart-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
     </style>
 </head>
 <body>
@@ -276,6 +283,13 @@
                 </div>
             </div>
         </details>
+    </div>
+
+    <div class="section-card">
+        <h2>📈 Progress Over Time</h2>
+        <div id="progress-charts">
+            <p class="context">No progress history yet — sync a tutor session to start tracking.</p>
+        </div>
     </div>
 
     <div class="section-card">

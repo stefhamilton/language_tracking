@@ -5,6 +5,7 @@ let vocabDeck = [];
 let stages = [];
 let log = [];
 let concepts = [];
+let progressHistory = [];
 let openStageIds = null;
 
 let currentCardIndex = 0;
@@ -52,12 +53,14 @@ async function loadData() {
             ...c,
             mastered: c.mastered === true || c.mastered === 'TRUE',
         }));
+        progressHistory = data.progressHistory || [];
 
         fieldCountToday = countTodayFieldEntries(log);
 
         setStatus('Connected. Last synced ' + new Date().toLocaleTimeString());
         renderCard();
         renderStages();
+        renderProgressChart();
         updateDashboard();
     } catch (err) {
         setStatus('Could not load data: ' + err.message, true);
@@ -489,6 +492,121 @@ RULES:
     document.getElementById('prompt-output').value = promptText;
 }
 
+function renderProgressChart() {
+    const container = document.getElementById('progress-charts');
+
+    if (!progressHistory || progressHistory.length === 0) {
+        container.innerHTML = '<p class="context">No progress history yet — sync a tutor session to start tracking.</p>';
+        return;
+    }
+
+    // Group history by phase
+    const phaseGroups = {};
+    for (const entry of progressHistory) {
+        const phase = String(entry.phase);
+        if (!phaseGroups[phase]) phaseGroups[phase] = [];
+        phaseGroups[phase].push(entry);
+    }
+
+    // Sort each phase's entries by timestamp
+    for (const phase of Object.keys(phaseGroups)) {
+        phaseGroups[phase].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }
+
+    let html = '';
+    const phaseIds = Object.keys(phaseGroups).sort((a, b) => Number(a) - Number(b));
+
+    for (const phaseId of phaseIds) {
+        const entries = phaseGroups[phaseId];
+        const stage = stages.find(s => String(s.id) === phaseId);
+        const phaseName = stage ? stage.name : `Phase ${phaseId}`;
+
+        html += `<div class="progress-chart-container">`;
+        html += `<h3>${phaseName}</h3>`;
+        html += renderSVGChart(entries);
+        html += `<div class="chart-legend">`;
+        html += `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:#10b981;"></span>Vocab</span>`;
+        html += `<span class="chart-legend-item"><span class="chart-legend-dot" style="background:#38bdf8;"></span>Concepts</span>`;
+        html += `</div>`;
+        html += `</div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+function renderSVGChart(entries) {
+    const width = 600;
+    const height = 140;
+    const padLeft = 30;
+    const padRight = 10;
+    const padTop = 10;
+    const padBottom = 25;
+    const chartW = width - padLeft - padRight;
+    const chartH = height - padTop - padBottom;
+
+    const maxY = 6; // Bloom levels 1–6
+    const minY = 0;
+
+    // X positions evenly spaced
+    const n = entries.length;
+    const xStep = n > 1 ? chartW / (n - 1) : chartW / 2;
+
+    function toX(i) { return padLeft + (n > 1 ? i * xStep : chartW / 2); }
+    function toY(val) { return padTop + chartH - (val / maxY) * chartH; }
+
+    // Build polyline points
+    let vocabPoints = '';
+    let conceptPoints = '';
+    for (let i = 0; i < n; i++) {
+        const x = toX(i).toFixed(1);
+        const yv = toY(Number(entries[i].avgBloomVocab) || 0).toFixed(1);
+        const yc = toY(Number(entries[i].avgBloomConcepts) || 0).toFixed(1);
+        vocabPoints += `${x},${yv} `;
+        conceptPoints += `${x},${yc} `;
+    }
+
+    // Date labels for first, middle, last
+    const dateLabels = [];
+    if (n >= 1) dateLabels.push({ i: 0, label: formatDate(entries[0].timestamp) });
+    if (n >= 3) dateLabels.push({ i: Math.floor(n / 2), label: formatDate(entries[Math.floor(n / 2)].timestamp) });
+    if (n >= 2) dateLabels.push({ i: n - 1, label: formatDate(entries[n - 1].timestamp) });
+
+    // Y-axis grid lines
+    let gridLines = '';
+    for (let level = 1; level <= 6; level++) {
+        const y = toY(level).toFixed(1);
+        gridLines += `<line x1="${padLeft}" y1="${y}" x2="${width - padRight}" y2="${y}" stroke="#334155" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+        gridLines += `<text x="${padLeft - 5}" y="${Number(y) + 3}" fill="#94a3b8" font-size="9" text-anchor="end">${level}</text>`;
+    }
+
+    let dateText = dateLabels.map(d =>
+        `<text x="${toX(d.i).toFixed(1)}" y="${height - 3}" fill="#94a3b8" font-size="9" text-anchor="middle">${d.label}</text>`
+    ).join('');
+
+    // Dots at data points
+    let vocabDots = '';
+    let conceptDots = '';
+    for (let i = 0; i < n; i++) {
+        const x = toX(i).toFixed(1);
+        vocabDots += `<circle cx="${x}" cy="${toY(Number(entries[i].avgBloomVocab) || 0).toFixed(1)}" r="3" fill="#10b981"/>`;
+        conceptDots += `<circle cx="${x}" cy="${toY(Number(entries[i].avgBloomConcepts) || 0).toFixed(1)}" r="3" fill="#38bdf8"/>`;
+    }
+
+    return `<svg class="progress-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+        ${gridLines}
+        <polyline points="${vocabPoints.trim()}" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="${conceptPoints.trim()}" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        ${vocabDots}
+        ${conceptDots}
+        ${dateText}
+    </svg>`;
+}
+
+function formatDate(ts) {
+    const d = new Date(ts);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 async function importTutorState() {
     const text = document.getElementById('tutor-import-input').value;
     const statusElem = document.getElementById('tutor-import-status');
@@ -630,6 +748,9 @@ async function importStructuredResults(data, btn, statusElem) {
             : ` | Stay in phase: ${rec.reason}`;
     }
 
+    // Log progress snapshot for each phase
+    await logProgressSnapshot();
+
     btn.disabled = false;
     const parts = [];
     if (conceptChanges) parts.push(`${conceptChanges} concept${conceptChanges === 1 ? '' : 's'}`);
@@ -638,6 +759,36 @@ async function importStructuredResults(data, btn, statusElem) {
     if (newVocabAdded) parts.push(`${newVocabAdded} new word${newVocabAdded === 1 ? '' : 's'} added`);
     statusElem.innerText = `✓ Synced — ${parts.join(', ') || 'no changes needed'}${recNote}`;
     statusElem.className = 'context';
+}
+
+async function logProgressSnapshot() {
+    // Compute average Bloom level per phase for vocab and concepts
+    const phaseIds = [...new Set(stages.map(s => String(s.id)))];
+    const snapshots = phaseIds.map(phaseId => {
+        const phaseVocab = vocabDeck.filter(v => String(v.phase) === phaseId);
+        const phaseConcepts = concepts.filter(c => String(c.phase) === phaseId);
+
+        // Vocab: mastered = 3, not mastered = 1
+        const avgBloomVocab = phaseVocab.length > 0
+            ? phaseVocab.reduce((sum, v) => sum + (v.mastered ? 3 : 1), 0) / phaseVocab.length
+            : 0;
+
+        // Concepts: parse Bloom level number from string like "Level 3: Applying"
+        const avgBloomConcepts = phaseConcepts.length > 0
+            ? phaseConcepts.reduce((sum, c) => {
+                const match = (c.bloomLevel || '').match(/Level\s*(\d+)/);
+                return sum + (match ? Number(match[1]) : 1);
+            }, 0) / phaseConcepts.length
+            : 0;
+
+        return {
+            phase: Number(phaseId),
+            avgBloomVocab: Math.round(avgBloomVocab * 100) / 100,
+            avgBloomConcepts: Math.round(avgBloomConcepts * 100) / 100,
+        };
+    });
+
+    await callScript({ action: 'logProgress', snapshots });
 }
 
 async function importLegacyText(text, btn, statusElem) {

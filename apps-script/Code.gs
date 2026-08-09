@@ -11,6 +11,7 @@ const SHEET_VOCAB = 'Vocab';
 const SHEET_LOG = 'Log';
 const SHEET_STAGES = 'Stages';
 const SHEET_CONCEPTS = 'Concepts';
+const SHEET_PROGRESS_HISTORY = 'ProgressHistory';
 
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -23,6 +24,7 @@ function doGet(e) {
     log: sheetToObjects(ss, SHEET_LOG),
     stages: sheetToObjects(ss, SHEET_STAGES),
     concepts: sheetToObjects(ss, SHEET_CONCEPTS),
+    progressHistory: sheetToObjects(ss, SHEET_PROGRESS_HISTORY),
   };
   return jsonResponse(data);
 }
@@ -56,6 +58,9 @@ function doPost(e) {
       break;
     case 'addVocab':
       addVocabWord(ss, body.eng, body.hil, body.cat, body.phase);
+      break;
+    case 'logProgress':
+      logProgressSnapshot(ss, body.snapshots);
       break;
     default:
       return jsonResponse({ error: 'Unknown action: ' + action });
@@ -214,6 +219,20 @@ function addVocabWord(ss, eng, hil, cat, phase) {
     }
   });
   sheet.appendRow(row);
+}
+
+function logProgressSnapshot(ss, snapshots) {
+  const sheet = getOrCreateSheet(ss, SHEET_PROGRESS_HISTORY);
+  // Ensure headers exist
+  const existing = sheet.getDataRange().getValues();
+  if (existing.length === 0 || existing[0][0] !== 'timestamp') {
+    sheet.clear();
+    sheet.appendRow(['timestamp', 'phase', 'avgBloomVocab', 'avgBloomConcepts']);
+  }
+  const now = new Date();
+  for (const snap of snapshots) {
+    sheet.appendRow([now, snap.phase, snap.avgBloomVocab, snap.avgBloomConcepts]);
+  }
 }
 
 function appendLogEntry(ss, type, detail, latencySeconds) {
