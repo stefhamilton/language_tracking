@@ -7,6 +7,39 @@ let log = [];
 let concepts = [];
 let progressHistory = [];
 let openStageIds = null;
+let fieldVocab = [];
+
+// Core Vocab and Field Vocab are the same flashcard + manager UI pointed at
+// two different lists, differing only in their extra per-word field (phase
+// vs. source) and whether that field also filters the deck. Only one list
+// is shown at a time, picked via the #vocab-list-select dropdown.
+const VOCAB_LISTS = {
+    core: {
+        getDeck: () => vocabDeck,
+        extraKey: 'phase',
+        extraType: 'select',
+        extraLabel: 'Phase',
+        filterable: true,
+        description: 'Your phase-plan vocabulary — the closed word set grammar is built on.',
+        mnemonicPlaceholder: `Mnemonic note, e.g. "Iwas sounds like 'eye was' — my eye WAS almost poked, so I stepped aside"`,
+        actions: { add: 'addVocab', edit: 'editVocab', delete: 'deleteVocab', mark: 'markVocab', mnemonic: 'setMnemonic' },
+    },
+    field: {
+        getDeck: () => fieldVocab,
+        extraKey: 'source',
+        extraType: 'text',
+        extraLabel: 'Source',
+        filterable: false,
+        description: 'Words you pick up outside the curriculum (e.g. from conversation) — kept separate from the phase plan and not counted in Overall Plan Progress.',
+        mnemonicPlaceholder: 'Mnemonic note',
+        actions: { add: 'addFieldVocab', edit: 'editFieldVocab', delete: 'deleteFieldVocab', mark: 'markFieldVocab', mnemonic: 'setFieldMnemonic' },
+    },
+};
+const listState = {
+    core: { cardIndex: 0, editingIndex: null },
+    field: { cardIndex: 0, editingIndex: null },
+};
+let activeListKey = 'core';
 
 document.getElementById('script-url').value = scriptUrl;
 if (scriptUrl) {
@@ -42,6 +75,7 @@ async function loadData() {
         vocabDeck = (data.vocab || []).map(v => ({
             ...v,
             mastered: v.mastered === true || v.mastered === 'TRUE',
+            flipped: false,
         }));
         stages = data.stages || [];
         log = data.log || [];
@@ -50,8 +84,16 @@ async function loadData() {
             mastered: c.mastered === true || c.mastered === 'TRUE',
         }));
         progressHistory = data.progressHistory || [];
+        fieldVocab = (data.fieldVocab || []).map(v => ({
+            ...v,
+            mastered: v.mastered === true || v.mastered === 'TRUE',
+            flipped: false,
+        }));
 
         setStatus('Connected. Last synced ' + new Date().toLocaleTimeString());
+        applyListSelectUI();
+        renderCard();
+        renderManager();
         renderStages();
         renderProgressChart();
         updateDashboard();
@@ -77,6 +119,335 @@ async function callScript(payload) {
     } catch (err) {
         setStatus('Sync failed: ' + err.message, true);
         return false;
+    }
+}
+
+function escapeHtmlAttr(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function applyListSelectUI() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    document.getElementById('vocab-list-select').value = activeListKey;
+    document.getElementById('vocab-list-desc').innerText = cfg.description;
+    document.getElementById('vocab-phase-filter').style.display = cfg.filterable ? '' : 'none';
+    document.getElementById('vocab-phase-filter-hint').style.display = cfg.filterable ? '' : 'none';
+    const extraInput = document.getElementById('vocab-new-extra');
+    extraInput.style.display = cfg.filterable ? 'none' : '';
+    extraInput.placeholder = cfg.extraKey === 'source' ? 'Source (e.g. Tatay, at the market)' : cfg.extraLabel;
+    document.getElementById('vocab-mnemonic-note').placeholder = cfg.mnemonicPlaceholder;
+    document.getElementById('vocab-manager-search').value = '';
+}
+
+function onListSelectChange() {
+    activeListKey = document.getElementById('vocab-list-select').value;
+    applyListSelectUI();
+    renderCard();
+    renderManager();
+}
+
+// Deck filtered by the shared phase select, for lists where extraKey
+// doubles as a deck filter (currently just 'core').
+function displayDeck() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = cfg.getDeck();
+    if (!cfg.filterable) return deck;
+    const filterElem = document.getElementById('vocab-phase-filter');
+    const val = filterElem ? filterElem.value : '';
+    return val ? deck.filter(v => String(v[cfg.extraKey] || '') === val) : deck;
+}
+
+function onDeckFilterChange() {
+    listState[activeListKey].cardIndex = 0;
+    renderCard();
+    renderManager();
+}
+
+function renderCard() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = displayDeck();
+    const state = listState[activeListKey];
+    const wordElem = document.getElementById('vocab-card-word');
+    const contextElem = document.getElementById('vocab-card-context');
+    const hintElem = document.getElementById('vocab-card-hint');
+
+    if (deck.length === 0) {
+        wordElem.innerText = cfg.getDeck().length === 0 ? 'No vocab yet' : 'No words match this filter';
+        contextElem.innerText = cfg.getDeck().length === 0 ? 'Add a word below' : '';
+        hintElem.innerText = '';
+        return;
+    }
+    if (state.cardIndex >= deck.length) state.cardIndex = 0;
+    const card = deck[state.cardIndex];
+
+    if (!card.flipped) {
+        wordElem.innerText = card.eng;
+        contextElem.innerText = 'Click to reveal Hiligaynon';
+        hintElem.innerText = card.cat ? 'Category: ' + card.cat : '';
+    } else {
+        wordElem.innerText = card.hil;
+        contextElem.innerText = 'English: ' + card.eng;
+        const extraVal = card[cfg.extraKey];
+        hintElem.innerText = card.mastered ? 'Remembered ✓' : (extraVal ? cfg.extraLabel + ': ' + extraVal : '');
+    }
+
+    renderMnemonicPanel(card);
+}
+
+function renderMnemonicPanel(card) {
+    const imgElem = document.getElementById('vocab-mnemonic-img');
+    const imgUrlInput = document.getElementById('vocab-mnemonic-image-url');
+    const noteInput = document.getElementById('vocab-mnemonic-note');
+
+    imgUrlInput.value = card.mnemonicImageUrl || '';
+    noteInput.value = card.mnemonic || '';
+
+    if (card.mnemonicImageUrl) {
+        imgElem.src = card.mnemonicImageUrl;
+        imgElem.style.display = 'block';
+    } else {
+        imgElem.style.display = 'none';
+    }
+}
+
+async function saveMnemonic() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = displayDeck();
+    if (deck.length === 0) return;
+    const state = listState[activeListKey];
+    const card = deck[state.cardIndex];
+    const mnemonic = document.getElementById('vocab-mnemonic-note').value.trim();
+    const mnemonicImageUrl = document.getElementById('vocab-mnemonic-image-url').value.trim();
+    const btn = document.getElementById('vocab-mnemonic-save-btn');
+    const statusElem = document.getElementById('vocab-mnemonic-save-status');
+
+    card.mnemonic = mnemonic;
+    card.mnemonicImageUrl = mnemonicImageUrl;
+
+    btn.disabled = true;
+    statusElem.innerText = 'Saving…';
+    statusElem.className = 'context';
+
+    const ok = await callScript({ action: cfg.actions.mnemonic, hil: card.hil, mnemonic, mnemonicImageUrl });
+
+    btn.disabled = false;
+    statusElem.innerText = ok ? `✓ Saved for ${card.hil}` : 'Save failed — check connection';
+    statusElem.className = ok ? 'context' : 'context error-text';
+    setTimeout(() => { statusElem.innerText = ''; }, 3000);
+
+    renderMnemonicPanel(card);
+}
+
+function flipCard() {
+    const deck = displayDeck();
+    if (deck.length === 0) return;
+    const state = listState[activeListKey];
+    deck[state.cardIndex].flipped = !deck[state.cardIndex].flipped;
+    renderCard();
+}
+
+function scoreCard(isMastered) {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = displayDeck();
+    if (deck.length === 0) return;
+    const state = listState[activeListKey];
+    const card = deck[state.cardIndex];
+    card.mastered = isMastered;
+    if (isMastered) card.timesCorrect = (card.timesCorrect || 0) + 1;
+    else card.timesMissed = (card.timesMissed || 0) + 1;
+
+    callScript({ action: cfg.actions.mark, hil: card.hil, mastered: isMastered });
+
+    card.flipped = false;
+    state.cardIndex = (state.cardIndex + 1) % deck.length;
+    if (activeListKey === 'core') updateDashboard();
+    renderCard();
+}
+
+function renderManager() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = cfg.getDeck();
+    const container = document.getElementById('vocab-manager-list');
+    if (!container) return;
+    const search = document.getElementById('vocab-manager-search').value.trim().toLowerCase();
+    const filterElem = cfg.filterable ? document.getElementById('vocab-phase-filter') : null;
+    const filterVal = filterElem ? filterElem.value : '';
+
+    const filtered = deck.filter(v => {
+        const matchesSearch = !search
+            || v.eng.toLowerCase().includes(search)
+            || v.hil.toLowerCase().includes(search)
+            || String(v.cat || '').toLowerCase().includes(search)
+            || String(v[cfg.extraKey] || '').toLowerCase().includes(search);
+        const matchesFilter = !filterVal || String(v[cfg.extraKey] || '') === filterVal;
+        return matchesSearch && matchesFilter;
+    });
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="concept-desc">No matching words.</div>';
+        return;
+    }
+
+    const state = listState[activeListKey];
+    container.innerHTML = filtered.map(card => {
+        const idx = deck.indexOf(card);
+
+        if (state.editingIndex === idx) {
+            const extraField = cfg.extraType === 'select'
+                ? `<select id="vocab-edit-extra-${idx}">${['', '1', '2', '3', '4'].map(p =>
+                    `<option value="${p}" ${String(card[cfg.extraKey] || '') === p ? 'selected' : ''}>${p ? 'Phase ' + p : 'Phase —'}</option>`
+                  ).join('')}</select>`
+                : `<input type="text" id="vocab-edit-extra-${idx}" value="${escapeHtmlAttr(card[cfg.extraKey] || '')}" placeholder="${cfg.extraLabel}">`;
+            return `
+                <div class="vocab-row">
+                    <div class="vocab-row-edit">
+                        <input type="text" id="vocab-edit-eng-${idx}" value="${escapeHtmlAttr(card.eng)}" placeholder="English">
+                        <input type="text" id="vocab-edit-hil-${idx}" value="${escapeHtmlAttr(card.hil)}" placeholder="Hiligaynon">
+                        <input type="text" id="vocab-edit-cat-${idx}" value="${escapeHtmlAttr(card.cat || '')}" placeholder="Category">
+                        ${extraField}
+                    </div>
+                    <button onclick="saveEditUI(${idx})">Save</button>
+                    <button class="secondary" onclick="cancelEdit()">Cancel</button>
+                </div>
+            `;
+        }
+
+        const extraDisplay = card[cfg.extraKey]
+            ? ' · ' + (cfg.extraType === 'select' ? 'Phase ' + card[cfg.extraKey] : card[cfg.extraKey])
+            : '';
+        return `
+            <div class="vocab-row">
+                <div class="vocab-row-main">
+                    <div class="vocab-row-eng">${card.eng}</div>
+                    <div class="vocab-row-meta">${card.hil}${card.cat ? ' · ' + card.cat : ''}${extraDisplay}</div>
+                </div>
+                <button class="secondary" onclick="startEdit(${idx})">Edit</button>
+                <button class="danger" onclick="deleteWordUI(${idx})">Delete</button>
+            </div>
+        `;
+    }).join('');
+}
+
+async function addWordUI() {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = cfg.getDeck();
+    const eng = document.getElementById('vocab-new-eng').value.trim();
+    const hil = document.getElementById('vocab-new-hil').value.trim();
+    const cat = document.getElementById('vocab-new-cat').value.trim();
+    // Filterable lists (core) reuse the shared phase filter as the new
+    // word's extra value; non-filterable lists (field) have their own input.
+    const extraElem = cfg.filterable
+        ? document.getElementById('vocab-phase-filter')
+        : document.getElementById('vocab-new-extra');
+    const extraVal = extraElem ? extraElem.value.trim() : '';
+    const statusElem = document.getElementById('vocab-add-status');
+
+    if (!eng || !hil) {
+        statusElem.innerText = 'English and Hiligaynon are both required.';
+        statusElem.className = 'context error-text';
+        return;
+    }
+    if (deck.some(v => v.hil.trim().toLowerCase() === hil.toLowerCase())) {
+        statusElem.innerText = `"${hil}" already exists in this list.`;
+        statusElem.className = 'context error-text';
+        return;
+    }
+
+    statusElem.innerText = 'Adding…';
+    statusElem.className = 'context';
+    const payload = { action: cfg.actions.add, eng, hil, cat };
+    payload[cfg.extraKey] = extraVal;
+    const ok = await callScript(payload);
+    if (!ok) {
+        statusElem.innerText = 'Failed to add — check connection.';
+        statusElem.className = 'context error-text';
+        return;
+    }
+
+    const newCard = {
+        eng, hil, cat,
+        mastered: false, timesCorrect: 0, timesMissed: 0,
+        lastReviewed: '', mnemonic: '', mnemonicImageUrl: '', flipped: false,
+    };
+    newCard[cfg.extraKey] = extraVal;
+    deck.push(newCard);
+
+    document.getElementById('vocab-new-eng').value = '';
+    document.getElementById('vocab-new-hil').value = '';
+    document.getElementById('vocab-new-cat').value = '';
+    // For filterable lists, the extra field IS the filter — clearing it
+    // here would reset any filter the user has active, so leave it alone.
+    if (!cfg.filterable) document.getElementById('vocab-new-extra').value = '';
+
+    statusElem.innerText = `✓ Added "${hil}"`;
+    statusElem.className = 'context';
+    setTimeout(() => { statusElem.innerText = ''; }, 3000);
+
+    renderManager();
+    renderCard();
+    if (activeListKey === 'core') {
+        renderStages();
+        updateDashboard();
+    }
+}
+
+function startEdit(idx) {
+    listState[activeListKey].editingIndex = idx;
+    renderManager();
+}
+
+function cancelEdit() {
+    listState[activeListKey].editingIndex = null;
+    renderManager();
+}
+
+async function saveEditUI(idx) {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = cfg.getDeck();
+    const card = deck[idx];
+    const originalHil = card.hil;
+    const eng = document.getElementById(`vocab-edit-eng-${idx}`).value.trim();
+    const hil = document.getElementById(`vocab-edit-hil-${idx}`).value.trim();
+    const cat = document.getElementById(`vocab-edit-cat-${idx}`).value.trim();
+    const extraVal = document.getElementById(`vocab-edit-extra-${idx}`).value.trim();
+
+    if (!eng || !hil) return;
+
+    const payload = { action: cfg.actions.edit, originalHil, eng, hil, cat };
+    payload[cfg.extraKey] = extraVal;
+    const ok = await callScript(payload);
+    if (ok) {
+        card.eng = eng;
+        card.hil = hil;
+        card.cat = cat;
+        card[cfg.extraKey] = extraVal;
+    }
+    listState[activeListKey].editingIndex = null;
+    renderManager();
+    renderCard();
+    if (activeListKey === 'core') {
+        renderStages();
+        updateDashboard();
+    }
+}
+
+async function deleteWordUI(idx) {
+    const cfg = VOCAB_LISTS[activeListKey];
+    const deck = cfg.getDeck();
+    const card = deck[idx];
+    if (!confirm(`Delete "${card.hil}" (${card.eng})? This can't be undone.`)) return;
+
+    const ok = await callScript({ action: cfg.actions.delete, hil: card.hil });
+    if (ok) {
+        deck.splice(idx, 1);
+        const state = listState[activeListKey];
+        if (state.cardIndex >= deck.length) state.cardIndex = 0;
+    }
+    renderManager();
+    renderCard();
+    if (activeListKey === 'core') {
+        renderStages();
+        updateDashboard();
     }
 }
 
@@ -217,6 +588,7 @@ function updateDashboard() {
                 cat: v.cat,
                 phase: Number(v.phase),
                 mastered: !!v.mastered,
+                bloom_level: v.mastered ? 'Level 1: Remembering' : 'Not yet reviewed',
                 times_correct: Number(v.timesCorrect) || 0,
                 times_missed: Number(v.timesMissed) || 0,
                 last_reviewed: v.lastReviewed || null,
@@ -248,7 +620,11 @@ The JSON has "format": "hiligaynon-tutor-interchange" and "direction": "context"
   - mastered: true if bloom_level >= Level 3 (Applying)
   - srs_state: scheduling data (current_step_index, consecutive_first_try_passes, next_review_due)
 
-• vocab[] — vocabulary items for this phase with mastery state.
+• vocab[] — vocabulary items for this phase. bloom_level is "Level 1:
+  Remembering" once the learner has passed it via flashcard recall in the
+  app, "Not yet reviewed" otherwise. This is a floor, not a ceiling —
+  passing Level 1 means the word is available for use, not that it's fully
+  mastered.
 
 • session_stats — aggregate progress.
 
@@ -268,15 +644,35 @@ Assess each concept based on what the learner DEMONSTRATES this session:
 mastered = true only at Level 3+. Be honest — lower levels if the learner regresses.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROGRESSION PHILOSOPHY: INTERLEAVED, NOT GATED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SRS scheduling (step_index, next_review_due) exists to protect long-term
+retention — it is NOT a gate on moving to new material. Do not make the
+learner wait out review intervals before advancing phases.
+
+• Once a concept reaches Level 3+ (Applying), the phase it belongs to may
+  advance regardless of SRS step_index or consecutive_passes.
+• Prior-phase concepts/vocab don't get abandoned on advancement — they
+  keep circulating via the SRS schedule below as warm-up review, interleaved
+  with new-phase material, not gated ahead of it.
+• A missed review is a signal to re-schedule that item sooner (reset
+  step_index per the rules below) — never a reason to block new material.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SESSION BEHAVIOR
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Prioritize concepts whose next_review_due is today or overdue.
-2. For concepts with low step_index or recent failures, drill more heavily.
-3. Use the learner's farm/Sapi-an context for all example sentences.
-4. Test production (learner produces Hiligaynon) more than recognition.
-5. Track whether the learner passes on FIRST attempt vs. needing hints/retries.
-6. Note production latency where relevant (fast = automatic, slow = still constructing).
+1. Start each session with a brief warm-up on any concepts (from ANY phase,
+   not just the current one) whose next_review_due is today or overdue.
+2. Then move to new-phase material — don't let overdue reviews block progress,
+   just work them in first.
+3. For concepts with low step_index or recent failures, drill more heavily
+   during their warm-up slot.
+4. Use the learner's farm/Sapi-an context for all example sentences.
+5. Test production (learner produces Hiligaynon) more than recognition.
+6. Track whether the learner passes on FIRST attempt vs. needing hints/retries.
+7. Note production latency where relevant (fast = automatic, slow = still constructing).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VOCABULARY SCAFFOLDING (STRICT RECALL)
@@ -286,6 +682,9 @@ VOCABULARY SCAFFOLDING (STRICT RECALL)
 • Always require the learner to produce mastered vocabulary from memory during drills.
 • Provide vocabulary hints ONLY for unmastered items (mastered == false) or when the learner explicitly requests a hint.
 • When introducing a new target sentence, state the sentence in English and let the learner perform total recall of all vocabulary and grammar markers.
+• The learner's vocabulary for this phase is a deliberately small, closed set — vocab[] above, nothing more. This is the core of the app's syntactic-bootstrapping approach: master grammatical structure on a fixed word set so the learner's brain later deduces new vocabulary from context on its own. NEVER introduce a Hiligaynon word in an example or practice sentence that isn't in vocab[] for this phase (or an already-mastered word from a prior phase's warm-up review) — vocabulary expansion is not the goal here, grammar mastery is.
+• When introducing a NEW concept for the first time this session, prefer building example/practice sentences from vocab where bloom_level is "Level 1: Remembering" or higher — don't stack unfamiliar grammar and unfamiliar vocabulary in the same unprompted-recall sentence.
+• If a concept genuinely requires a word the learner hasn't passed Level 1 on yet, either gloss/give that word directly (don't test it) or introduce it briefly via simple exposure before folding it into concept practice.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 INTERACTION FORMAT (SINGLE ITEM PER TURN)
@@ -312,7 +711,9 @@ Per concept reviewed:
 
 • next_review_due = today + interval_sequence_days[new_step_index] days
 
-Graduated = step_index at max AND consecutive_passes >= len(intervals).
+Graduated = step_index at max AND consecutive_passes >= len(intervals). This
+describes how well-retained a concept's review schedule is — it is a
+retention metric, not a prerequisite for phase advancement (see above).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
@@ -385,7 +786,7 @@ RULES:
 • Concept names and hil values must match input EXACTLY.
 • Compute srs_updates yourself using the rules above.
 • Omit new_vocab_discovered if none.
-• advance = true only if ALL current-phase concepts are mastered (bloom >= 3) with step_index >= 2.
+• advance = true if ALL current-phase concepts are mastered (bloom_level >= Level 3: Applying). Do NOT require any SRS step_index or consecutive_passes threshold — SRS state only controls when a mastered concept resurfaces for review, never whether the phase can advance.
 • Output ONLY the JSON code block — no commentary before or after.`;
 
     const promptText = systemPrompt + '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSESSION CONTEXT (paste begins here)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' + JSON.stringify(contextPayload, null, 2);
@@ -458,6 +859,29 @@ function renderProgressGauge() {
     container.innerHTML = svg;
 }
 
+const MAX_CHART_DAYS = 30;
+
+// Collapse a sorted array of {timestamp, avgBloomVocab, avgBloomConcepts}
+// entries down to one point per calendar day (the max value seen that day),
+// capped to the most recent MAX_CHART_DAYS days.
+function bucketByDayMax(entries) {
+    const byDay = new Map();
+    for (const entry of entries) {
+        const d = new Date(entry.timestamp);
+        const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const existing = byDay.get(dayKey);
+        if (!existing) {
+            byDay.set(dayKey, { ...entry });
+        } else {
+            existing.avgBloomVocab = Math.max(Number(existing.avgBloomVocab) || 0, Number(entry.avgBloomVocab) || 0);
+            existing.avgBloomConcepts = Math.max(Number(existing.avgBloomConcepts) || 0, Number(entry.avgBloomConcepts) || 0);
+            existing.timestamp = entry.timestamp; // keep the latest timestamp of that day
+        }
+    }
+    const daily = [...byDay.values()];
+    return daily.slice(Math.max(0, daily.length - MAX_CHART_DAYS));
+}
+
 function renderProgressChart() {
     renderProgressGauge();
     const container = document.getElementById('progress-charts');
@@ -470,9 +894,11 @@ function renderProgressChart() {
         phaseGroups[phase].push(entry);
     }
 
-    // Sort each phase's entries by timestamp
+    // Sort each phase's entries by timestamp, then collapse to one
+    // (max-value) point per day, capped to the most recent MAX_CHART_DAYS.
     for (const phase of Object.keys(phaseGroups)) {
         phaseGroups[phase].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        phaseGroups[phase] = bucketByDayMax(phaseGroups[phase]);
     }
 
     let html = '';

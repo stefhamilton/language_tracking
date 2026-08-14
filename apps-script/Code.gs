@@ -12,6 +12,7 @@ const SHEET_LOG = 'Log';
 const SHEET_STAGES = 'Stages';
 const SHEET_CONCEPTS = 'Concepts';
 const SHEET_PROGRESS_HISTORY = 'ProgressHistory';
+const SHEET_FIELD_VOCAB = 'FieldVocab';
 
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -25,6 +26,7 @@ function doGet(e) {
     stages: sheetToObjects(ss, SHEET_STAGES),
     concepts: sheetToObjects(ss, SHEET_CONCEPTS),
     progressHistory: sheetToObjects(ss, SHEET_PROGRESS_HISTORY),
+    fieldVocab: sheetToObjects(ss, SHEET_FIELD_VOCAB),
   };
   return jsonResponse(data);
 }
@@ -59,6 +61,27 @@ function doPost(e) {
     case 'addVocab':
       addVocabWord(ss, body.eng, body.hil, body.cat, body.phase);
       break;
+    case 'editVocab':
+      editVocabWord(ss, body.originalHil, body.eng, body.hil, body.cat, body.phase);
+      break;
+    case 'deleteVocab':
+      deleteVocabWord(ss, body.hil);
+      break;
+    case 'markFieldVocab':
+      updateVocabMastery(ss, body.hil, body.mastered, SHEET_FIELD_VOCAB);
+      break;
+    case 'setFieldMnemonic':
+      updateMnemonic(ss, body.hil, body.mnemonic, body.mnemonicImageUrl, SHEET_FIELD_VOCAB);
+      break;
+    case 'addFieldVocab':
+      addFieldVocabWord(ss, body.eng, body.hil, body.cat, body.source);
+      break;
+    case 'editFieldVocab':
+      editFieldVocabWord(ss, body.originalHil, body.eng, body.hil, body.cat, body.source);
+      break;
+    case 'deleteFieldVocab':
+      deleteVocabWord(ss, body.hil, SHEET_FIELD_VOCAB);
+      break;
     case 'logProgress':
       logProgressSnapshot(ss, body.snapshots);
       break;
@@ -84,8 +107,8 @@ function sheetToObjects(ss, sheetName) {
     });
 }
 
-function updateVocabMastery(ss, hil, mastered) {
-  const sheet = ss.getSheetByName(SHEET_VOCAB);
+function updateVocabMastery(ss, hil, mastered, sheetName) {
+  const sheet = ss.getSheetByName(sheetName || SHEET_VOCAB);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const hilCol = headers.indexOf('hil');
@@ -106,8 +129,8 @@ function updateVocabMastery(ss, hil, mastered) {
   }
 }
 
-function updateMnemonic(ss, hil, mnemonic, mnemonicImageUrl) {
-  const sheet = ss.getSheetByName(SHEET_VOCAB);
+function updateMnemonic(ss, hil, mnemonic, mnemonicImageUrl, sheetName) {
+  const sheet = ss.getSheetByName(sheetName || SHEET_VOCAB);
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const hilCol = headers.indexOf('hil');
@@ -219,6 +242,107 @@ function addVocabWord(ss, eng, hil, cat, phase) {
     }
   });
   sheet.appendRow(row);
+}
+
+function editVocabWord(ss, originalHil, eng, hil, cat, phase) {
+  const sheet = ss.getSheetByName(SHEET_VOCAB);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const hilCol = headers.indexOf('hil');
+  const engCol = headers.indexOf('eng');
+  const catCol = headers.indexOf('cat');
+  const phaseCol = headers.indexOf('phase');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][hilCol] === originalHil) {
+      sheet.getRange(r + 1, engCol + 1).setValue(eng || '');
+      sheet.getRange(r + 1, hilCol + 1).setValue(hil || '');
+      sheet.getRange(r + 1, catCol + 1).setValue(cat || '');
+      if (phaseCol !== -1) sheet.getRange(r + 1, phaseCol + 1).setValue(phase || '');
+      break;
+    }
+  }
+}
+
+function addFieldVocabWord(ss, eng, hil, cat, source) {
+  const sheet = getOrCreateSheet(ss, SHEET_FIELD_VOCAB);
+  const values = sheet.getDataRange().getValues();
+  const headers = values.length ? values[0] : [];
+  const hilCol = headers.indexOf('hil');
+
+  if (hilCol !== -1) {
+    for (let r = 1; r < values.length; r++) {
+      if (String(values[r][hilCol]).toLowerCase().trim() === hil.toLowerCase().trim()) {
+        return; // already exists, skip
+      }
+    }
+  }
+
+  const row = (headers.length ? headers : ['eng', 'hil', 'cat', 'source', 'mastered', 'timesCorrect', 'timesMissed', 'lastReviewed', 'mnemonic', 'mnemonicImageUrl']).map(h => {
+    switch (h) {
+      case 'eng': return eng || '';
+      case 'hil': return hil || '';
+      case 'cat': return cat || '';
+      case 'source': return source || '';
+      case 'mastered': return false;
+      case 'timesCorrect': return 0;
+      case 'timesMissed': return 0;
+      case 'lastReviewed': return '';
+      case 'mnemonic': return '';
+      case 'mnemonicImageUrl': return '';
+      default: return '';
+    }
+  });
+  sheet.appendRow(row);
+}
+
+function editFieldVocabWord(ss, originalHil, eng, hil, cat, source) {
+  const sheet = ss.getSheetByName(SHEET_FIELD_VOCAB);
+  if (!sheet) return;
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const hilCol = headers.indexOf('hil');
+  const engCol = headers.indexOf('eng');
+  const catCol = headers.indexOf('cat');
+  const sourceCol = headers.indexOf('source');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][hilCol] === originalHil) {
+      sheet.getRange(r + 1, engCol + 1).setValue(eng || '');
+      sheet.getRange(r + 1, hilCol + 1).setValue(hil || '');
+      sheet.getRange(r + 1, catCol + 1).setValue(cat || '');
+      if (sourceCol !== -1) sheet.getRange(r + 1, sourceCol + 1).setValue(source || '');
+      break;
+    }
+  }
+}
+
+/**
+ * Run this once from the Apps Script editor to create the FieldVocab sheet
+ * (for words picked up outside the phase curriculum, e.g. from
+ * conversation). Non-destructive: does nothing if the sheet already exists.
+ */
+function createFieldVocabSheet() {
+  const ss = getSpreadsheet();
+  const sheet = getOrCreateSheet(ss, SHEET_FIELD_VOCAB);
+  if (sheet.getDataRange().getValues().length === 0 || sheet.getDataRange().getValues()[0][0] !== 'eng') {
+    sheet.clear();
+    sheet.appendRow(['eng', 'hil', 'cat', 'source', 'mastered', 'timesCorrect', 'timesMissed', 'lastReviewed', 'mnemonic', 'mnemonicImageUrl']);
+  }
+}
+
+function deleteVocabWord(ss, hil, sheetName) {
+  const sheet = ss.getSheetByName(sheetName || SHEET_VOCAB);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const hilCol = headers.indexOf('hil');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][hilCol] === hil) {
+      sheet.deleteRow(r + 1);
+      break;
+    }
+  }
 }
 
 function logProgressSnapshot(ss, snapshots) {
