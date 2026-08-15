@@ -7,6 +7,7 @@ let log = [];
 let concepts = [];
 let progressHistory = [];
 let openStageIds = null;
+let pendingOpenStageId = null;
 let fieldVocab = [];
 
 // Core Vocab and Field Vocab are the same flashcard + manager UI pointed at
@@ -462,6 +463,13 @@ function renderStages() {
             if (el.open) openStageIds.add(id);
             else openStageIds.delete(id);
         });
+    }
+    // A just-advanced stage should open even though its (not-yet-rendered)
+    // DOM node was still collapsed a moment ago — apply it after the DOM
+    // sync above so it isn't immediately deleted as "closed".
+    if (pendingOpenStageId) {
+        openStageIds.add(pendingOpenStageId);
+        pendingOpenStageId = null;
     }
 
     container.innerHTML = '';
@@ -1137,13 +1145,35 @@ async function importStructuredResults(data, btn, statusElem) {
         }
     }
 
-    // Show phase recommendation if present
+    // Apply phase recommendation — advance the current stage to Done and
+    // open the next one, so this doesn't require a manual Sheet edit.
+    // Concepts/vocab already mastered keep circulating via the SRS warm-up
+    // rotation regardless of phase, and a failed review still resets
+    // step_index to 0 (see srs_updates above), so nothing here weakens
+    // review of items you get wrong — advancing just unlocks new material.
     let recNote = '';
     if (payload.phase_recommendation) {
         const rec = payload.phase_recommendation;
-        recNote = rec.advance
-            ? ` | Phase advance recommended: ${rec.reason}`
-            : ` | Stay in phase: ${rec.reason}`;
+        if (rec.advance) {
+            const stage = currentStage();
+            if (stage && stage.status === 'In Progress') {
+                const nextStage = stages.find(s => Number(s.id) === Number(stage.id) + 1);
+                stage.status = 'Done';
+                await callScript({ action: 'setStage', stageId: stage.id, status: 'Done' });
+                if (nextStage) {
+                    nextStage.status = 'In Progress';
+                    await callScript({ action: 'setStage', stageId: nextStage.id, status: 'In Progress' });
+                    pendingOpenStageId = String(nextStage.id);
+                    recNote = ` | ✓ Advanced to ${nextStage.name}: ${rec.reason}`;
+                } else {
+                    recNote = ` | ✓ Phase ${stage.id} complete (final phase): ${rec.reason}`;
+                }
+            } else {
+                recNote = ` | Phase advance recommended: ${rec.reason}`;
+            }
+        } else {
+            recNote = ` | Stay in phase: ${rec.reason}`;
+        }
     }
 
     // Log progress snapshot for each phase
