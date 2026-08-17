@@ -1145,35 +1145,16 @@ async function importStructuredResults(data, btn, statusElem) {
         }
     }
 
-    // Apply phase recommendation — advance the current stage to Done and
-    // open the next one, so this doesn't require a manual Sheet edit.
-    // Concepts/vocab already mastered keep circulating via the SRS warm-up
-    // rotation regardless of phase, and a failed review still resets
-    // step_index to 0 (see srs_updates above), so nothing here weakens
-    // review of items you get wrong — advancing just unlocks new material.
+    // Show phase recommendation but don't auto-advance — the learner controls
+    // their own pacing. Mastered concepts keep circulating as SRS warm-up
+    // review regardless, so deferring phase advance doesn't slow retention
+    // of already-mastered material, just prevents premature material overlap.
     let recNote = '';
     if (payload.phase_recommendation) {
         const rec = payload.phase_recommendation;
-        if (rec.advance) {
-            const stage = currentStage();
-            if (stage && stage.status === 'In Progress') {
-                const nextStage = stages.find(s => Number(s.id) === Number(stage.id) + 1);
-                stage.status = 'Done';
-                await callScript({ action: 'setStage', stageId: stage.id, status: 'Done' });
-                if (nextStage) {
-                    nextStage.status = 'In Progress';
-                    await callScript({ action: 'setStage', stageId: nextStage.id, status: 'In Progress' });
-                    pendingOpenStageId = String(nextStage.id);
-                    recNote = ` | ✓ Advanced to ${nextStage.name}: ${rec.reason}`;
-                } else {
-                    recNote = ` | ✓ Phase ${stage.id} complete (final phase): ${rec.reason}`;
-                }
-            } else {
-                recNote = ` | Phase advance recommended: ${rec.reason}`;
-            }
-        } else {
-            recNote = ` | Stay in phase: ${rec.reason}`;
-        }
+        recNote = rec.advance
+            ? ` | Phase ready to advance: ${rec.reason} (manually advance when you feel solid)`
+            : ` | Stay in phase for now: ${rec.reason}`;
     }
 
     // Log progress snapshot for each phase
