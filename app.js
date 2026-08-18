@@ -652,6 +652,26 @@ Assess each concept based on what the learner DEMONSTRATES this session:
 mastered = true only at Level 3+. Be honest — lower levels if the learner regresses.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BLOOM ADVANCEMENT CONSERVATISM
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Bloom level advances require DEMONSTRATED CONSISTENCY over time. Do not boost a concept
+more than +1 level in a single session. This means:
+
+• If current bloom_level = Level 2, max assessment this session = Level 3.
+• If current bloom_level = Level 3, max assessment this session = Level 4.
+• Never jump 2+ levels in one session, even if the learner performed flawlessly.
+
+Additionally, pay attention to the srs_state:
+• If a concept's current_step_index is low (0, 1, 2) or recent first_try_failures > 0,
+  the learner's actual retention is still building — be cautious about advancing.
+  A concept at Level 2 with step_index 0 is not ready for Level 3 yet.
+• A concept reaches Level 3+ (mastered) only when it shows both strong recall AND
+  solid scheduling (step_index 3+, minimal recent failures).
+
+Real mastery = competence + retention. Don't let a single strong session trick you.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PROGRESSION PHILOSOPHY: INTERLEAVED, NOT GATED
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -794,7 +814,7 @@ RULES:
 • Concept names and hil values must match input EXACTLY.
 • Compute srs_updates yourself using the rules above.
 • Omit new_vocab_discovered if none.
-• advance = true if ALL current-phase concepts are mastered (bloom_level >= Level 3: Applying). Do NOT require any SRS step_index or consecutive_passes threshold — SRS state only controls when a mastered concept resurfaces for review, never whether the phase can advance.
+• advance = true if ALL current-phase concepts are mastered (bloom_level >= Level 3: Applying) AND none had failures this session. If any concept at Level 3+ had first_attempt_passed = false, do NOT recommend advance — the learner needs to re-drill that concept before progressing. SRS state only controls review timing for mastered concepts, never whether the phase can advance; however, recent failures block advance until the concept is re-passed.
 • Output ONLY the JSON code block — no commentary before or after.`;
 
     const promptText = systemPrompt + '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSESSION CONTEXT (paste begins here)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' + JSON.stringify(contextPayload, null, 2);
@@ -1061,6 +1081,7 @@ async function importStructuredResults(data, btn, statusElem) {
     let conceptChanges = 0;
     let vocabChanges = 0;
     let srsChanges = 0;
+    const conceptsWithBloomIncrease = new Set(); // Track concepts that leveled up
 
     // Apply concept_results
     if (payload.concept_results && payload.concept_results.length) {
@@ -1072,6 +1093,18 @@ async function importStructuredResults(data, btn, statusElem) {
             const masteredChanged = concept.mastered !== mastered;
             const bloomChanged = bloomLevel && concept.bloomLevel !== bloomLevel;
             if (!masteredChanged && !bloomChanged) continue;
+
+            // Check if Bloom level increased (parse "Level N: ..." format)
+            if (bloomChanged && bloomLevel) {
+                const oldMatch = (concept.bloomLevel || '').match(/Level\s*(\d+)/);
+                const newMatch = bloomLevel.match(/Level\s*(\d+)/);
+                const oldNum = oldMatch ? Number(oldMatch[1]) : 0;
+                const newNum = newMatch ? Number(newMatch[1]) : 0;
+                if (newNum > oldNum) {
+                    conceptsWithBloomIncrease.add(cr.name);
+                }
+            }
+
             concept.mastered = mastered;
             if (bloomLevel) concept.bloomLevel = bloomLevel;
             if (mastered) concept.timesCorrect = (concept.timesCorrect || 0) + 1;
@@ -1102,18 +1135,28 @@ async function importStructuredResults(data, btn, statusElem) {
         for (const su of payload.srs_updates) {
             const concept = concepts.find(c => c.name === su.concept);
             if (!concept) continue;
-            concept.currentStepIndex = su.new_step_index;
-            concept.consecutivePasses = su.consecutive_first_try_passes;
+
+            // If Bloom level increased, reset SRS to step_index 0 (daily review)
+            // for the new cognitive skill
+            let newStepIndex = su.new_step_index;
+            let newConsecutivePasses = su.consecutive_first_try_passes;
+            if (conceptsWithBloomIncrease.has(su.concept)) {
+                newStepIndex = 0;
+                newConsecutivePasses = 0;
+            }
+
+            concept.currentStepIndex = newStepIndex;
+            concept.consecutivePasses = newConsecutivePasses;
             concept.nextReviewDue = su.next_review_due;
             concept.totalReviews = (Number(concept.totalReviews) || 0) + 1;
-            if (su.new_step_index === 0 && su.previous_step_index > 0) {
+            if (newStepIndex === 0 && su.previous_step_index > 0) {
                 concept.firstTryFailures = (Number(concept.firstTryFailures) || 0) + 1;
             }
             await callScript({
                 action: 'updateSRS',
                 name: su.concept,
-                currentStepIndex: su.new_step_index,
-                consecutivePasses: su.consecutive_first_try_passes,
+                currentStepIndex: newStepIndex,
+                consecutivePasses: newConsecutivePasses,
                 nextReviewDue: su.next_review_due,
                 totalReviews: concept.totalReviews,
                 firstTryFailures: concept.firstTryFailures || 0,
