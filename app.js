@@ -9,6 +9,7 @@ let progressHistory = [];
 let openStageIds = null;
 let pendingOpenStageId = null;
 let fieldVocab = [];
+let learnerNotes = '';
 
 // Core Vocab and Field Vocab are the same flashcard + manager UI pointed at
 // two different lists, differing only in their extra per-word field (phase
@@ -90,6 +91,9 @@ async function loadData() {
             mastered: v.mastered === true || v.mastered === 'TRUE',
             flipped: false,
         }));
+        learnerNotes = data.learnerNotes || '';
+        const notesInput = document.getElementById('learner-notes-input');
+        if (notesInput) notesInput.value = learnerNotes;
 
         setStatus('Connected. Last synced ' + new Date().toLocaleTimeString());
         applyListSelectUI();
@@ -237,6 +241,26 @@ async function saveMnemonic() {
     setTimeout(() => { statusElem.innerText = ''; }, 3000);
 
     renderMnemonicPanel(card);
+}
+
+async function saveLearnerNotes() {
+    const notes = document.getElementById('learner-notes-input').value.trim();
+    const btn = document.getElementById('learner-notes-save-btn');
+    const statusElem = document.getElementById('learner-notes-save-status');
+
+    btn.disabled = true;
+    statusElem.innerText = 'Saving…';
+    statusElem.className = 'context';
+
+    const ok = await callScript({ action: 'saveNotes', notes });
+    learnerNotes = notes;
+
+    btn.disabled = false;
+    statusElem.innerText = ok ? '✓ Saved — will be included in your next session prompt' : 'Save failed — check connection';
+    statusElem.className = ok ? 'context' : 'context error-text';
+    setTimeout(() => { statusElem.innerText = ''; }, 3000);
+
+    updateDashboard();
 }
 
 function flipCard() {
@@ -559,6 +583,7 @@ function updateDashboard() {
                 context: 'Farm environment',
                 target_language: 'Hiligaynon (Capiznon variant)',
             },
+            learner_notes_for_this_session: learnerNotes || null,
             srs_policy: {
                 target_retention_rate: 0.88,
                 interval_sequence_days: [1, 2, 4, 7, 12, 20],
@@ -615,6 +640,13 @@ INPUT FORMAT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 The JSON has "format": "hiligaynon-tutor-interchange" and "direction": "context". Key sections:
+
+• learner_notes_for_this_session — free-text instructions the learner left for
+  themselves in the app between sessions (e.g. "ask me to explain X," "focus on Y
+  today," a correction to make, something they want covered). If non-null, this is
+  a direct instruction from the learner — read it first and act on it as part of
+  this session's plan, alongside (not instead of) the normal warm-up/new-material
+  flow below.
 
 • srs_policy — spaced-repetition settings:
   - target_retention_rate: desired recall probability (e.g. 0.88)

@@ -27,6 +27,7 @@ function doGet(e) {
     concepts: sheetToObjects(ss, SHEET_CONCEPTS),
     progressHistory: sheetToObjects(ss, SHEET_PROGRESS_HISTORY),
     fieldVocab: sheetToObjects(ss, SHEET_FIELD_VOCAB),
+    learnerNotes: PropertiesService.getScriptProperties().getProperty('learnerNotes') || '',
   };
   return jsonResponse(data);
 }
@@ -84,6 +85,9 @@ function doPost(e) {
       break;
     case 'logProgress':
       logProgressSnapshot(ss, body.snapshots);
+      break;
+    case 'saveNotes':
+      PropertiesService.getScriptProperties().setProperty('learnerNotes', body.notes || '');
       break;
     default:
       return jsonResponse({ error: 'Unknown action: ' + action });

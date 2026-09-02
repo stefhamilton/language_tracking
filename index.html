@@ -413,6 +413,16 @@
     </div>
 
     <div class="section-card">
+        <h2>📝 Context for Next Session</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Leave yourself instructions for the tutor here — e.g. "ask me to describe X" or "focus on Y today." Saved to the Sheet and automatically included in the session prompt below until you clear it.</p>
+        <textarea id="learner-notes-input" placeholder="e.g. Ask me to describe actor vs object focus prefixes and when to use them." style="height: 90px;"></textarea>
+        <div class="btn-group" style="margin-top: 8px; justify-content: flex-start;">
+            <button class="secondary" id="learner-notes-save-btn" onclick="saveLearnerNotes()">Save Notes</button>
+            <span id="learner-notes-save-status" class="context"></span>
+        </div>
+    </div>
+
+    <div class="section-card">
         <h2>📋 AI Session Master Prompt Persistence</h2>
         <p style="font-size: 0.85rem; color: var(--text-muted);">Copy this snippet anytime you open a new AI chat to instantly load your updated stats.</p>
         <textarea id="prompt-output" readonly style="height: 260px; resize: vertical;"></textarea>
@@ -434,6 +444,6 @@
     </div>
 </div>
 
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
