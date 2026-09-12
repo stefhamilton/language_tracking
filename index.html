@@ -430,13 +430,14 @@
             <button onclick="copyPrompt()">Copy Session Context</button>
         </div>
 
-        <details class="mnemonic-panel">
+        <details class="mnemonic-panel" open>
             <summary>🔄 Sync progress from tutor</summary>
             <div style="margin-top: 10px;">
                 <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0 0 8px;">Paste the updated state block your tutor gave you back here. This mirrors it exactly — checked items get marked remembered, unchecked items get marked not-remembered.</p>
                 <textarea id="tutor-import-input" placeholder="Paste the updated MY HILIGAYNON APP STATE block here..." style="height: 160px;"></textarea>
                 <div class="btn-group" style="margin-top: 8px; justify-content: flex-start;">
                     <button class="secondary" id="tutor-import-btn" onclick="importTutorState()">Sync from Tutor</button>
+                    <button class="secondary" id="tutor-import-clear-btn" onclick="clearTutorImportInput()">Clear</button>
                     <span id="tutor-import-status" class="context"></span>
                 </div>
             </div>
@@ -444,6 +445,6 @@
     </div>
 </div>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

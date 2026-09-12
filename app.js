@@ -1076,6 +1076,11 @@ function formatDate(ts) {
     return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
+function clearTutorImportInput() {
+    document.getElementById('tutor-import-input').value = '';
+    document.getElementById('tutor-import-status').innerText = '';
+}
+
 async function importTutorState() {
     const text = document.getElementById('tutor-import-input').value;
     const statusElem = document.getElementById('tutor-import-status');
