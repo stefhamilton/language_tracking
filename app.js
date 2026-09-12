@@ -1371,9 +1371,33 @@ async function importLegacyText(text, btn, statusElem) {
     statusElem.className = 'context';
 }
 
-function copyPrompt() {
+async function copyPrompt() {
     const copyText = document.getElementById("prompt-output");
-    copyText.select();
-    document.execCommand("copy");
-    alert("Copied context! Paste this directly into your next AI chat session.");
+    const icon = document.getElementById("copy-prompt-icon");
+    const label = document.getElementById("copy-prompt-label");
+    const btn = document.getElementById("copy-prompt-btn");
+
+    let copied = false;
+    try {
+        await navigator.clipboard.writeText(copyText.value);
+        copied = true;
+    } catch (e) {
+        copied = false;
+    }
+
+    if (copied) {
+        icon.innerText = "✅";
+        label.innerText = "Copied!";
+        btn.classList.add("copied");
+    } else {
+        icon.innerText = "⚠️";
+        label.innerText = "Copy failed — select and copy manually";
+        btn.classList.add("copy-failed");
+    }
+
+    setTimeout(() => {
+        icon.innerText = "📋";
+        label.innerText = "Copy Session Context";
+        btn.classList.remove("copied", "copy-failed");
+    }, 2000);
 }

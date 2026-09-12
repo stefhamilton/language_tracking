@@ -112,6 +112,8 @@
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         button.secondary { background: #475569; color: #fff; }
         button.danger { background: #ef4444; color: #fff; }
+        button.copied { background: #22c55e; color: #000; }
+        button.copy-failed { background: #ef4444; color: #fff; }
 
         textarea, input[type="text"] {
             width: 100%;
@@ -427,7 +429,10 @@
         <p style="font-size: 0.85rem; color: var(--text-muted);">Copy this snippet anytime you open a new AI chat to instantly load your updated stats.</p>
         <textarea id="prompt-output" readonly style="height: 260px; resize: vertical;"></textarea>
         <div style="text-align: right; margin-top: 8px;">
-            <button onclick="copyPrompt()">Copy Session Context</button>
+            <button id="copy-prompt-btn" onclick="copyPrompt()">
+                <span id="copy-prompt-icon">📋</span>
+                <span id="copy-prompt-label">Copy Session Context</span>
+            </button>
         </div>
 
         <details class="mnemonic-panel" open>
@@ -446,6 +451,6 @@
 </div>
 
 <script src="config.local.js"></script>
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
