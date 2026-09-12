@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'hiligaynon_apps_script_url';
 
-let scriptUrl = localStorage.getItem(STORAGE_KEY) || '';
+let scriptUrl = localStorage.getItem(STORAGE_KEY) || window.HILIGAYNON_SCRIPT_URL || '';
 let vocabDeck = [];
 let stages = [];
 let log = [];

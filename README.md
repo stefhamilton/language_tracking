@@ -39,6 +39,12 @@ python3 -m http.server 8080
 Open `http://localhost:8080`, paste your Web App URL into the Settings panel,
 and click **Save & Connect**.
 
+The URL is saved to `localStorage`, which can get cleared (different browser,
+private window, sandboxed preview, etc.). To avoid re-pasting it every time
+locally, copy `config.local.example.js` to `config.local.js` and fill in your
+Web App URL — `app.js` falls back to it whenever `localStorage` is empty.
+`config.local.js` is gitignored, so it never gets committed or deployed.
+
 ## 3. Deploy to GitHub Pages
 
 1. Push this repo to GitHub (already at `stefhamilton/language_tracking`).
