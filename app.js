@@ -1371,10 +1371,13 @@ async function importLegacyText(text, btn, statusElem) {
     statusElem.className = 'context';
 }
 
+const COPY_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+const CHECK_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+const WARNING_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>';
+
 async function copyPrompt() {
     const copyText = document.getElementById("prompt-output");
     const icon = document.getElementById("copy-prompt-icon");
-    const label = document.getElementById("copy-prompt-label");
     const btn = document.getElementById("copy-prompt-btn");
 
     let copied = false;
@@ -1386,18 +1389,18 @@ async function copyPrompt() {
     }
 
     if (copied) {
-        icon.innerText = "✅";
-        label.innerText = "Copied!";
+        icon.innerHTML = CHECK_ICON_SVG;
         btn.classList.add("copied");
+        btn.title = "Copied!";
     } else {
-        icon.innerText = "⚠️";
-        label.innerText = "Copy failed — select and copy manually";
+        icon.innerHTML = WARNING_ICON_SVG;
         btn.classList.add("copy-failed");
+        btn.title = "Copy failed — select and copy manually";
     }
 
     setTimeout(() => {
-        icon.innerText = "📋";
-        label.innerText = "Copy Session Context";
+        icon.innerHTML = COPY_ICON_SVG;
         btn.classList.remove("copied", "copy-failed");
+        btn.title = "Copy Session Context";
     }, 2000);
 }
