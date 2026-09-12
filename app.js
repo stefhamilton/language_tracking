@@ -733,6 +733,14 @@ SESSION BEHAVIOR
 5. Test production (learner produces Hiligaynon) more than recognition.
 6. Track whether the learner passes on FIRST attempt vs. needing hints/retries.
 7. Note production latency where relevant (fast = automatic, slow = still constructing).
+8. Vocabulary growth is not automatic — it does not happen as a side effect of
+   concept practice, since concept sentences should mostly reuse already-known
+   words (see VOCABULARY SCAFFOLDING below). Regardless of concept work, each
+   session pick 2-3 vocab[] items with bloom_level "Not yet reviewed" from the
+   current phase and give them a first-pass introduction: state the English
+   gloss, have the learner produce or repeat the Hiligaynon, and test recall
+   at least once more later in the session. Include these in vocab_results
+   even if no concept happened to need them.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VOCABULARY SCAFFOLDING (STRICT RECALL)
