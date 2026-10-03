@@ -625,6 +625,13 @@ function updateDashboard() {
                 times_correct: Number(v.timesCorrect) || 0,
                 times_missed: Number(v.timesMissed) || 0,
                 last_reviewed: v.lastReviewed || null,
+                srs_state: {
+                    current_step_index: Number(v.currentStepIndex) || 0,
+                    consecutive_first_try_passes: Number(v.consecutivePasses) || 0,
+                    total_reviews: Number(v.totalReviews) || 0,
+                    first_try_failures: Number(v.firstTryFailures) || 0,
+                    next_review_due: v.nextReviewDue || null,
+                },
             })),
             session_stats: {
                 vocab_mastered_count: masteredCount,
@@ -664,7 +671,9 @@ The JSON has "format": "hiligaynon-tutor-interchange" and "direction": "context"
   Remembering" once the learner has passed it via flashcard recall in the
   app, "Not yet reviewed" otherwise. This is a floor, not a ceiling —
   passing Level 1 means the word is available for use, not that it's fully
-  mastered.
+  mastered. Each word also has srs_state (current_step_index,
+  consecutive_first_try_passes, next_review_due) — this is the authority on
+  whether a word needs review today, exactly like concepts.
 
 • session_stats — aggregate progress.
 
@@ -723,24 +732,29 @@ learner wait out review intervals before advancing phases.
 SESSION BEHAVIOR
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1. Start each session with a brief warm-up on any concepts (from ANY phase,
-   not just the current one) whose next_review_due is today or overdue.
+1. Start each session with a brief warm-up on any concepts AND vocab items
+   (from ANY phase, not just the current one) whose next_review_due is today
+   or overdue, per their srs_state. This is how you know what's actually due
+   — not just "not yet reviewed" vocab, but previously-passed words that are
+   due to decay and need re-testing now.
 2. Then move to new-phase material — don't let overdue reviews block progress,
    just work them in first.
-3. For concepts with low step_index or recent failures, drill more heavily
-   during their warm-up slot.
+3. For concepts/vocab with low step_index or recent failures, drill more
+   heavily during their warm-up slot.
 4. Use the learner's farm/Sapi-an context for all example sentences.
 5. Test production (learner produces Hiligaynon) more than recognition.
 6. Track whether the learner passes on FIRST attempt vs. needing hints/retries.
 7. Note production latency where relevant (fast = automatic, slow = still constructing).
 8. Vocabulary growth is not automatic — it does not happen as a side effect of
    concept practice, since concept sentences should mostly reuse already-known
-   words (see VOCABULARY SCAFFOLDING below). Regardless of concept work, each
-   session pick 2-3 vocab[] items with bloom_level "Not yet reviewed" from the
-   current phase and give them a first-pass introduction: state the English
-   gloss, have the learner produce or repeat the Hiligaynon, and test recall
-   at least once more later in the session. Include these in vocab_results
-   even if no concept happened to need them.
+   words (see VOCABULARY SCAFFOLDING below). After handling overdue vocab from
+   step 1, if there's still room this session, pick 2-3 vocab[] items with
+   bloom_level "Not yet reviewed" from the current phase and give them a
+   first-pass introduction: state the English gloss, have the learner produce
+   or repeat the Hiligaynon, and test recall at least once more later in the
+   session. Include both overdue-review and newly-introduced words in
+   vocab_results — every vocab item you test this session needs an entry,
+   not just the new ones.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VOCABULARY SCAFFOLDING (STRICT RECALL)
@@ -769,7 +783,11 @@ INTERACTION FORMAT (SINGLE ITEM PER TURN)
 SRS ADVANCEMENT RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Per concept reviewed:
+These rules apply identically to concepts AND vocab — every vocab item you
+test needs its SRS recomputed the same way a concept does, using its OWN
+srs_state.current_step_index as the starting point (not the concept's).
+
+Per item reviewed (concept or vocab word):
 
 • First-try PASS:
   new_step_index = min(current_step_index + 1, len(interval_sequence_days) - 1)
@@ -782,8 +800,11 @@ Per concept reviewed:
 • next_review_due = today + interval_sequence_days[new_step_index] days
 
 Graduated = step_index at max AND consecutive_passes >= len(intervals). This
-describes how well-retained a concept's review schedule is — it is a
+describes how well-retained an item's review schedule is — it is a
 retention metric, not a prerequisite for phase advancement (see above).
+
+For a vocab word with no prior srs_state (brand new, first-pass introduction
+this session), treat current_step_index as 0 before applying the rules above.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 OUTPUT FORMAT
@@ -823,7 +844,11 @@ At session END, output exactly ONE fenced JSON code block (\`\`\`json ... \`\`\`
         "hil": "<must match input spelling>",
         "tested": true,
         "passed": <boolean>,
-        "latency_seconds": <number or null>
+        "latency_seconds": <number or null>,
+        "previous_step_index": <from input srs_state, or 0 if new>,
+        "new_step_index": <computed per SRS ADVANCEMENT RULES>,
+        "consecutive_first_try_passes": <updated>,
+        "next_review_due": "<ISO 8601>"
       }
     ],
     "srs_updates": [
@@ -855,6 +880,7 @@ RULES:
 • Only include concepts/vocab actually tested this session.
 • Concept names and hil values must match input EXACTLY.
 • Compute srs_updates yourself using the rules above.
+• Compute the SRS fields inside each vocab_results entry the same way, using that word's own srs_state as the starting point.
 • Omit new_vocab_discovered if none.
 • advance = true if ALL current-phase concepts are mastered (bloom_level >= Level 3: Applying) AND none had failures this session. If any concept at Level 3+ had first_attempt_passed = false, do NOT recommend advance — the learner needs to re-drill that concept before progressing. SRS state only controls review timing for mastered concepts, never whether the phase can advance; however, recent failures block advance until the concept is re-passed.
 • Output ONLY the JSON code block — no commentary before or after.`;
@@ -1161,19 +1187,41 @@ async function importStructuredResults(data, btn, statusElem) {
         }
     }
 
-    // Apply vocab_results
+    // Apply vocab_results — always record the tested word's counters and SRS
+    // schedule, even if "mastered" didn't flip (e.g. a repeat failure on an
+    // already-unmastered word still needs its miss counted and its review
+    // rescheduled to tomorrow, not silently dropped).
     if (payload.vocab_results && payload.vocab_results.length) {
         for (const vr of payload.vocab_results) {
             if (!vr.tested) continue;
             const card = vocabDeck.find(v => v.hil.trim().toLowerCase() === vr.hil.trim().toLowerCase());
             if (!card) continue;
             const mastered = !!vr.passed;
-            if (card.mastered === mastered) continue;
             card.mastered = mastered;
             if (mastered) card.timesCorrect = (card.timesCorrect || 0) + 1;
             else card.timesMissed = (card.timesMissed || 0) + 1;
             await callScript({ action: 'markVocab', hil: card.hil, mastered });
             vocabChanges++;
+
+            if (vr.new_step_index !== undefined && vr.new_step_index !== null) {
+                card.currentStepIndex = vr.new_step_index;
+                card.consecutivePasses = vr.consecutive_first_try_passes;
+                card.nextReviewDue = vr.next_review_due;
+                card.totalReviews = (Number(card.totalReviews) || 0) + 1;
+                if (vr.new_step_index === 0 && vr.previous_step_index > 0) {
+                    card.firstTryFailures = (Number(card.firstTryFailures) || 0) + 1;
+                }
+                await callScript({
+                    action: 'updateVocabSRS',
+                    hil: card.hil,
+                    currentStepIndex: vr.new_step_index,
+                    consecutivePasses: vr.consecutive_first_try_passes,
+                    nextReviewDue: vr.next_review_due,
+                    totalReviews: card.totalReviews,
+                    firstTryFailures: card.firstTryFailures || 0,
+                });
+                srsChanges++;
+            }
         }
     }
 

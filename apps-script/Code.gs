@@ -59,6 +59,9 @@ function doPost(e) {
     case 'updateSRS':
       updateConceptSRS(ss, body.name, body.currentStepIndex, body.consecutivePasses, body.nextReviewDue, body.totalReviews, body.firstTryFailures);
       break;
+    case 'updateVocabSRS':
+      updateVocabSRS(ss, body.hil, body.currentStepIndex, body.consecutivePasses, body.nextReviewDue, body.totalReviews, body.firstTryFailures);
+      break;
     case 'addVocab':
       addVocabWord(ss, body.eng, body.hil, body.cat, body.phase);
       break;
@@ -128,6 +131,42 @@ function updateVocabMastery(ss, hil, mastered, sheetName) {
       const current = values[r][counterCol] || 0;
       sheet.getRange(r + 1, counterCol + 1).setValue(current + 1);
       sheet.getRange(r + 1, lastReviewedCol + 1).setValue(new Date());
+      break;
+    }
+  }
+}
+
+function updateVocabSRS(ss, hil, currentStepIndex, consecutivePasses, nextReviewDue, totalReviews, firstTryFailures) {
+  const sheet = ss.getSheetByName(SHEET_VOCAB);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const hilCol = headers.indexOf('hil');
+
+  // Ensure SRS columns exist; add them if missing
+  const srsColumns = ['currentStepIndex', 'consecutivePasses', 'nextReviewDue', 'totalReviews', 'firstTryFailures'];
+  let currentHeaders = sheet.getDataRange().getValues()[0];
+  for (const col of srsColumns) {
+    if (currentHeaders.indexOf(col) === -1) {
+      sheet.getRange(1, currentHeaders.length + 1).setValue(col);
+      currentHeaders.push(col);
+    }
+  }
+
+  // Re-read after potential column additions
+  const updatedHeaders = sheet.getDataRange().getValues()[0];
+  const stepCol = updatedHeaders.indexOf('currentStepIndex');
+  const passesCol = updatedHeaders.indexOf('consecutivePasses');
+  const nextDueCol = updatedHeaders.indexOf('nextReviewDue');
+  const totalCol = updatedHeaders.indexOf('totalReviews');
+  const failCol = updatedHeaders.indexOf('firstTryFailures');
+
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][hilCol] === hil) {
+      sheet.getRange(r + 1, stepCol + 1).setValue(currentStepIndex);
+      sheet.getRange(r + 1, passesCol + 1).setValue(consecutivePasses);
+      sheet.getRange(r + 1, nextDueCol + 1).setValue(nextReviewDue || '');
+      sheet.getRange(r + 1, totalCol + 1).setValue(totalReviews || 0);
+      sheet.getRange(r + 1, failCol + 1).setValue(firstTryFailures || 0);
       break;
     }
   }
