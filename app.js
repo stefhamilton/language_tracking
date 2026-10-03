@@ -1452,3 +1452,14 @@ async function copyPrompt() {
         btn.title = "Copy Session Context";
     }, 2000);
 }
+
+function downloadPrompt() {
+    const promptText = document.getElementById("prompt-output").value;
+    const blob = new Blob([promptText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `hiligaynon-session-context-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+}

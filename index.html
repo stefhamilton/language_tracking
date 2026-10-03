@@ -435,11 +435,16 @@
     <div class="section-card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
             <h2>📋 AI Session Master Prompt Persistence</h2>
-            <button id="copy-prompt-btn" class="secondary icon-btn" onclick="copyPrompt()" title="Copy Session Context" aria-label="Copy Session Context">
-                <span id="copy-prompt-icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </span>
-            </button>
+            <div class="btn-group" style="justify-content: flex-end;">
+                <button id="download-prompt-btn" class="secondary icon-btn" onclick="downloadPrompt()" title="Download as .txt" aria-label="Download Session Context as text file">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </button>
+                <button id="copy-prompt-btn" class="secondary icon-btn" onclick="copyPrompt()" title="Copy Session Context" aria-label="Copy Session Context">
+                    <span id="copy-prompt-icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </span>
+                </button>
+            </div>
         </div>
         <p style="font-size: 0.85rem; color: var(--text-muted);">Copy this snippet anytime you open a new AI chat to instantly load your updated stats.</p>
         <textarea id="prompt-output" readonly style="height: 260px; resize: vertical;"></textarea>
@@ -460,6 +465,6 @@
 </div>
 
 <script src="config.local.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
