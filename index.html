@@ -137,6 +137,8 @@
         textarea { height: 90px; resize: none; }
 
         .stage-list { display: flex; flex-direction: column; gap: 8px; }
+        .stage-advance { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 12px; }
+        .stage-advance:empty { display: none; }
         .stage-item {
             background: #0f172a;
             border-radius: 6px;
@@ -420,6 +422,7 @@
     <div class="section-card">
         <h2>🗺️ Plan Progress</h2>
         <div class="stage-list" id="stage-list"></div>
+        <div class="stage-advance" id="stage-advance"></div>
     </div>
 
     <div class="section-card">

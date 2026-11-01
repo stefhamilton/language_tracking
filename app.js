@@ -8,6 +8,10 @@ let concepts = [];
 let progressHistory = [];
 let openStageIds = null;
 let pendingOpenStageId = null;
+// Latest tutor phase_recommendation from this page session, used only to
+// highlight the manual advance button — advancing itself stays a click.
+let lastPhaseRecommendation = null;
+let stageAdvanceConfirming = false;
 let fieldVocab = [];
 let learnerNotes = '';
 
@@ -536,6 +540,81 @@ function renderStages() {
         `;
         container.appendChild(item);
     });
+
+    renderStageAdvance();
+}
+
+function renderStageAdvance() {
+    const container = document.getElementById('stage-advance');
+    const stage = stages.find(s => s.status === 'In Progress');
+    const nextStage = stage && stages.find(s => Number(s.id) === Number(stage.id) + 1);
+    if (!stage) {
+        container.innerHTML = '';
+        return;
+    }
+
+    // Inline two-step confirm rather than window.confirm(), which some
+    // embedded browsers suppress (returning false without showing a dialog).
+    if (stageAdvanceConfirming) {
+        const msg = nextStage
+            ? `Mark ${escapeHtmlAttr(stage.name)} as Done and start ${escapeHtmlAttr(nextStage.name)}?`
+            : `Mark ${escapeHtmlAttr(stage.name)} (the final phase) as Done?`;
+        container.innerHTML = `
+            <div class="context">${msg}</div>
+            <div class="btn-group">
+                <button onclick="advanceStage()">Yes, advance</button>
+                <button class="secondary" onclick="setStageAdvanceConfirming(false)">Cancel</button>
+            </div>
+        `;
+        return;
+    }
+
+    const recommended = lastPhaseRecommendation && lastPhaseRecommendation.advance;
+    const label = nextStage ? `Advance to ${escapeHtmlAttr(nextStage.name)}` : `Mark ${escapeHtmlAttr(stage.name)} complete`;
+    const hint = recommended
+        ? `Tutor says you're ready: ${escapeHtmlAttr(lastPhaseRecommendation.reason)}`
+        : 'Advance when you feel solid on this phase.';
+    container.innerHTML = `
+        <button class="${recommended ? '' : 'secondary'}" onclick="setStageAdvanceConfirming(true)">${label}</button>
+        <div class="context">${hint}</div>
+    `;
+}
+
+function setStageAdvanceConfirming(on) {
+    stageAdvanceConfirming = on;
+    renderStageAdvance();
+}
+
+async function advanceStage() {
+    const stage = stages.find(s => s.status === 'In Progress');
+    if (!stage) return;
+    const nextStage = stages.find(s => Number(s.id) === Number(stage.id) + 1);
+
+    document.querySelectorAll('#stage-advance button').forEach(b => b.disabled = true);
+
+    if (!await callScript({ action: 'setStage', stageId: stage.id, status: 'Done' })) {
+        setStageAdvanceConfirming(false);
+        return;
+    }
+    stage.status = 'Done';
+    // Only mirror the next stage locally once the sheet has it, so the page
+    // never shows a phase as In Progress that the sheet doesn't.
+    const nextSaved = nextStage
+        && await callScript({ action: 'setStage', stageId: nextStage.id, status: 'In Progress' });
+    if (nextSaved) {
+        nextStage.status = 'In Progress';
+        pendingOpenStageId = String(nextStage.id);
+    }
+    stageAdvanceConfirming = false;
+    lastPhaseRecommendation = null;
+
+    renderStages();
+    updateDashboard();
+    if (nextStage && !nextSaved) {
+        setStatus(`${stage.name} marked Done, but starting ${nextStage.name} failed to sync. Set it to In Progress in the sheet, then reload.`, true);
+    } else {
+        setStatus(nextStage ? `Advanced to ${nextStage.name}.` : `${stage.name} complete.`);
+    }
 }
 
 function escapeAttr(str) {
@@ -1298,8 +1377,9 @@ async function importStructuredResults(data, btn, statusElem) {
     let recNote = '';
     if (payload.phase_recommendation) {
         const rec = payload.phase_recommendation;
+        lastPhaseRecommendation = rec;
         recNote = rec.advance
-            ? ` | Phase ready to advance: ${rec.reason} (manually advance when you feel solid)`
+            ? ` | Phase ready to advance: ${rec.reason} (use the advance button under Plan Progress when you feel solid)`
             : ` | Stay in phase for now: ${rec.reason}`;
     }
 
